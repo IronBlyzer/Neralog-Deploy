@@ -1,9 +1,14 @@
 ---
-# roles/filebeat/tasks/main.yml — Linux (Debian/RedHat) + FreeBSD.
+# roles/filebeat/tasks/main.yml — Linux (Debian/RedHat) + FreeBSD + macOS (Darwin).
 
-- name: Définir les chemins selon l'OS
+- name: Définir le dossier de config selon l'OS
   ansible.builtin.set_fact:
-    filebeat_config_dir: "{{ '/usr/local/etc/filebeat' if ansible_facts['os_family'] == 'FreeBSD' else '/etc/filebeat' }}"
+    filebeat_config_dir: "{{ filebeat_cfg_map[ansible_facts['os_family']] | default('/etc/filebeat') }}"
+  vars:
+    filebeat_cfg_map:
+      FreeBSD: /usr/local/etc/filebeat
+      # macOS via Homebrew : /opt/homebrew (Apple Silicon) ou /usr/local (Intel)
+      Darwin: "{{ '/opt/homebrew/etc/beats' if ansible_facts['architecture'] == 'arm64' else '/usr/local/etc/beats' }}"
 
 - name: Installer (Debian/Ubuntu)
   ansible.builtin.include_tasks: install-debian.yml
@@ -20,10 +25,15 @@
   when: ansible_facts['os_family'] == "FreeBSD"
   tags: [install]
 
+- name: Installer (macOS / Homebrew — EXPÉRIMENTAL)
+  ansible.builtin.include_tasks: install-macos.yml
+  when: ansible_facts['os_family'] == "Darwin"
+  tags: [install]
+
 - name: Échouer proprement si l'OS n'est pas géré
   ansible.builtin.fail:
     msg: "OS non supporté : {{ ansible_facts['os_family'] }} ({{ ansible_facts['distribution'] | default('?') }})"
-  when: ansible_facts['os_family'] not in ["Debian", "RedHat", "FreeBSD"]
+  when: ansible_facts['os_family'] not in ["Debian", "RedHat", "FreeBSD", "Darwin"]
 
 - name: Déployer la configuration filebeat.yml
   ansible.builtin.template:
@@ -44,6 +54,7 @@
   failed_when:
     - module_enable.rc != 0
     - "'already enabled' not in module_enable.stdout"
+  when: ansible_facts['os_family'] != "Darwin"   # modules Linux-only ; macOS = entrées fichier
   tags: [config]
 
 - name: Activer et démarrer le service Filebeat
@@ -51,4 +62,13 @@
     name: filebeat
     state: started
     enabled: true
+  when: ansible_facts['os_family'] != "Darwin"   # macOS démarré via brew services (cf. install-macos)
+  tags: [service]
+
+- name: (macOS) Démarrer/redémarrer Filebeat via brew services
+  ansible.builtin.command:
+    cmd: brew services restart filebeat-full
+  become: false
+  when: ansible_facts['os_family'] == "Darwin"
+  changed_when: true
   tags: [service]

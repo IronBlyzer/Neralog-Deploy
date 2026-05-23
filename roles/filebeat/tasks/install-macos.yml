@@ -1,0 +1,17 @@
+---
+# install-macos.yml — Filebeat sur macOS via Homebrew.
+# ⚠️ EXPÉRIMENTAL, NON TESTÉ sur une vraie machine.
+# Prérequis cible : Homebrew installé, Remote Login (SSH) actif, compte admin.
+# Homebrew refuse de tourner en root -> become: false sur ces tâches.
+
+- name: (macOS) Ajouter le tap Elastic
+  community.general.homebrew_tap:
+    name: elastic/tap
+    state: present
+  become: false
+
+- name: (macOS) Installer filebeat-full
+  community.general.homebrew:
+    name: elastic/tap/filebeat-full
+    state: present
+  become: false

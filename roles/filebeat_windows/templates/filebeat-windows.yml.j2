@@ -1,0 +1,66 @@
+# {{ ansible_managed }}
+# filebeat.yml (Windows) — généré par Ansible. Ne pas éditer à la main.
+# Sous Windows, Filebeat collecte les JOURNAUX D'ÉVÉNEMENTS via l'entrée `winlog`
+# (et non des fichiers /var/log comme sous Linux).
+
+# ===========================================================================
+# Entrées : journaux d'événements Windows
+# ===========================================================================
+filebeat.inputs:
+{% for channel in filebeat_win_channels %}
+  - type: winlog
+    name: {{ channel }}
+    ignore_older: 72h
+{% endfor %}
+{% if filebeat_win_log_paths %}
+  # Fichiers de logs applicatifs éventuels (IIS, etc.)
+  - type: filestream
+    id: win-files
+    enabled: true
+    paths:
+{% for path in filebeat_win_log_paths %}
+      - '{{ path }}'
+{% endfor %}
+{% endif %}
+
+# ===========================================================================
+# Champs ajoutés à chaque événement (dont le client en multi-tenant)
+# ===========================================================================
+fields_under_root: true
+fields:
+{% for key, value in filebeat_extra_fields.items() %}
+  {{ key }}: "{{ value }}"
+{% endfor %}
+  hostname: "{{ inventory_hostname }}"
+
+# ===========================================================================
+# Sortie centralisée
+# ===========================================================================
+{% if filebeat_output_type == "logstash" %}
+output.logstash:
+  hosts: ["{{ filebeat_output_host }}"]
+{% if filebeat_tls_enabled %}
+  ssl.certificate_authorities: ["{{ filebeat_tls_ca }}"]
+{% endif %}
+{% elif filebeat_output_type == "elasticsearch" %}
+output.elasticsearch:
+  hosts:
+{% for es in filebeat_es_hosts %}
+    - "{{ es }}"
+{% endfor %}
+  username: "{{ filebeat_es_username }}"
+  password: "{{ filebeat_es_password }}"
+{% if filebeat_tls_enabled %}
+  ssl.certificate_authorities: ["{{ filebeat_tls_ca }}"]
+{% endif %}
+{% endif %}
+
+# ===========================================================================
+# Divers
+# ===========================================================================
+logging.level: info
+logging.to_files: true
+logging.files:
+  path: C:\ProgramData\filebeat\logs
+  name: filebeat
+  keepfiles: 7

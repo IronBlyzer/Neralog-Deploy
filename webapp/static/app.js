@@ -7,7 +7,7 @@ const selected = new Set();     // IPs cochées
 const credOverride = {};        // ip -> {user, password} : creds perso (non persistés)
 
 const $ = (id) => document.getElementById(id);
-const OS_ORDER = ["linux", "windows", "freebsd", "unknown"];
+const OS_ORDER = ["linux", "windows", "macos", "freebsd", "unknown"];
 
 // ------------------------------------------------------------------ INIT
 (async function init() {
@@ -119,7 +119,10 @@ function renderTable() {
     if (!h.online) tr.classList.add("offline");
 
     const appliance = h.appliance ? `<span class="appliance-tag">${h.appliance}</span>` : "";
-    const svcs = h.services.map((s) => `<span class="svc">${s}</span>`).join("");
+    const sshOpen = (h.open_ports || []).includes(22);
+    const sshBadge = `<span class="svc ssh ${sshOpen ? "ok" : "no"}" title="${sshOpen ? "SSH ouvert — déployable" : "SSH fermé — non déployable"}">ssh</span>`;
+    const others = (h.services || []).filter((s) => s !== "ssh").map((s) => `<span class="svc">${s}</span>`).join("");
+    const svcs = sshBadge + others;
     const picker = OS_ORDER.map((o) => `<option value="${o}" ${o === os ? "selected" : ""}>${o}</option>`).join("");
     const onlineDot = `<span class="state-dot ${h.online ? "on" : "off"}" title="${h.online ? "vu au dernier scan" : "absent du dernier scan"}"></span>`;
     const deployed = h.deployed ? `<span class="fb-badge" title="Filebeat déployé">✓ FB</span>` : "";
@@ -131,7 +134,7 @@ function renderTable() {
       <td class="state">${onlineDot}${keyed}${deployed}</td>
       <td class="hostname">${esc(h.hostname || "—")}${appliance}</td>
       <td class="ip">${h.ip}</td>
-      <td><select class="os-pick ${os}" data-ip="${h.ip}">${picker}</select></td>
+      <td><select class="os-pick ${os}" data-ip="${h.ip}">${picker}</select>${h.os_name ? `<div class="os-detected" title="OS détecté par nmap">${esc(h.os_name)}</div>` : ""}</td>
       <td title="ports: ${h.open_ports.join(" ")}">${svcs}</td>
       <td class="act">
         <button class="creds ${hasCred ? "set" : ""}" data-ip="${h.ip}" title="identifiants spécifiques à cette machine">creds</button>
@@ -211,19 +214,28 @@ function applySelection(mode) {
   renderTable();
 }
 
+// Type de déploiement (config Filebeat taillée par type d'OS).
+const DEPLOY_BUCKETS = { linux: "Linux/BSD", freebsd: "Linux/BSD", macos: "macOS", windows: "Windows" };
+function deployBucket(os) { return DEPLOY_BUCKETS[os] || null; }
+
 function updateSelCount() {
   $("sel-count").textContent = selected.size;
-  $("deploy-btn").disabled = selected.size === 0;
   $("seed-count").textContent = selected.size;
   $("seed-btn").disabled = selected.size === 0;
 
-  // Indique combien de machines sélectionnées passent par clé vs mot de passe
   const sel = HOSTS.filter((h) => selected.has(h.ip));
   const keyed = sel.filter((h) => h.access === "key").length;
   const nokey = sel.length - keyed;
+
+  // Un seul type d'OS par déploiement (config propre + log lisible).
+  const buckets = [...new Set(sel.map((h) => deployBucket(h.os_family)).filter(Boolean))];
+  const mixed = buckets.length > 1;
+  $("deploy-btn").disabled = selected.size === 0 || mixed;
+
   const hint = $("ssh-hint");
   if (hint) {
     if (sel.length === 0) hint.textContent = "Sélectionne des machines pour déployer.";
+    else if (mixed) hint.innerHTML = `⚠️ Tu mélanges plusieurs types d'OS (${buckets.join(" + ")}). Déploie <strong>un seul type à la fois</strong> — la config Filebeat diffère selon l'OS.`;
     else if (nokey === 0) hint.innerHTML = `✓ ${keyed} machine(s) 🔑 — déploiement par clé.`;
     else hint.innerHTML = `🔑 ${keyed} par clé · <strong>${nokey}</strong> sans clé : sème-les via l'onglet Accès, ou renseigne leur identifiant avec « creds » en partie 2.`;
   }

@@ -5,8 +5,9 @@ FROM python:3.12-slim
 #   openssh-client : connexions SSH (Linux/FreeBSD)
 #   sshpass        : auth SSH par mot de passe (si pas de clé)
 #   iputils-ping   : ping ICMP pour le scan (sinon fallback TCP)
+#   nmap           : moteur de scan préféré (découverte ARP + détection d'OS)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        openssh-client sshpass iputils-ping \
+        openssh-client sshpass iputils-ping nmap \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

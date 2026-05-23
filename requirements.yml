@@ -2,6 +2,6 @@
 # Collections Ansible requises. Installe-les sur le poste admin :
 #   ansible-galaxy collection install -r requirements.yml
 collections:
-  - name: community.general      # module pkgng (FreeBSD)
+  - name: community.general      # module pkgng (FreeBSD) + homebrew (macOS)
   - name: ansible.windows        # win_get_url / win_package / win_service / win_user / win_acl
   - name: community.windows      # win_lineinfile (clé Windows)

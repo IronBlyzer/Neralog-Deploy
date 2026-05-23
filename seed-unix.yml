@@ -11,7 +11,7 @@
 #   lock_bootstrap  : true pour verrouiller le compte admin d'origine après coup
 
 - name: Seeding clé SSH — Linux & FreeBSD
-  hosts: linux:freebsd
+  hosts: linux:freebsd:macos
   gather_facts: true
   become: true
   vars:

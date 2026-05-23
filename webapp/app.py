@@ -156,7 +156,7 @@ def host_name(h: dict) -> str:
 
 def build_inventory(selected: list[dict]) -> dict:
     """Inventaire de déploiement : clé pour les machines semées, sinon creds par machine (partie 2)."""
-    groups = {g: {"hosts": {}} for g in ("linux", "freebsd", "windows", "unknown")}
+    groups = {g: {"hosts": {}} for g in ("linux", "freebsd", "macos", "windows", "unknown")}
     for h in selected:
         osf = h.get("os_family", "unknown")
         if osf not in groups:
@@ -166,7 +166,7 @@ def build_inventory(selected: list[dict]) -> dict:
         cred_user = (h.get("cred_user") or "").strip()
         cred_pw = h.get("cred_password") or ""
         hv: dict = {"ansible_host": h["ip"]}
-        if osf in ("linux", "freebsd"):
+        if osf in ("linux", "freebsd", "macos"):
             hv["ansible_connection"] = "ssh"
             if keyed:
                 hv["ansible_user"] = SVC_USER
@@ -201,14 +201,14 @@ def build_inventory(selected: list[dict]) -> dict:
 
 def build_bootstrap_inventory(selected: list[dict]) -> dict:
     """Inventaire de seeding : chaque hôte porte ses creds résolus (_buser/_bpass)."""
-    groups = {g: {"hosts": {}} for g in ("linux", "freebsd", "windows", "unknown")}
+    groups = {g: {"hosts": {}} for g in ("linux", "freebsd", "macos", "windows", "unknown")}
     for h in selected:
         osf = h.get("os_family", "unknown")
         if osf not in groups or osf == "unknown":
             continue
         name = host_name(h)
         hv: dict = {"ansible_host": h["ip"], "ansible_user": h["_buser"], "ansible_password": h["_bpass"]}
-        if osf in ("linux", "freebsd"):
+        if osf in ("linux", "freebsd", "macos"):
             hv["ansible_connection"] = "ssh"
             hv["ansible_become_password"] = h["_bpass"]
             if osf == "freebsd":
@@ -307,6 +307,13 @@ def api_deploy():
     if not selected:
         return jsonify({"error": "Aucune machine sélectionnée."}), 400
 
+    # Un seul type d'OS par déploiement : la config Filebeat diffère selon l'OS
+    # (modules/chemins Linux vs canaux d'événements Windows). Éviter de mélanger.
+    _bucket = {"linux": "Linux/BSD", "freebsd": "Linux/BSD", "macos": "macOS", "windows": "Windows"}
+    deploy_buckets = {_bucket[osf] for h in selected if (osf := h.get("os_family")) in _bucket}
+    if len(deploy_buckets) > 1:
+        return jsonify({"error": f"Déploie un seul type d'OS à la fois ({' + '.join(sorted(deploy_buckets))} mélangés). Sépare Linux/BSD, macOS et Windows."}), 400
+
     # La sortie vient du .env (ELK connu) ; le client peut surcharger si besoin.
     output = data.get("output", {})
 
@@ -332,7 +339,7 @@ def api_deploy():
     # Ne lancer que les playbooks nécessaires (un parc Linux n'exige pas la collection Windows).
     families = {h.get("os_family") for h in selected}
     playbooks: list[str] = []
-    if families & {"linux", "freebsd"}:
+    if families & {"linux", "freebsd", "macos"}:
         playbooks.append("deploy-unix.yml")
     if "windows" in families:
         playbooks.append("deploy-windows.yml")
@@ -390,7 +397,7 @@ def api_key():
 def api_seed():
     """Sème la clé de la console sur les machines sélectionnées (compte dédié)."""
     data = request.get_json(force=True)
-    selected = [h for h in data.get("hosts", []) if h.get("os_family") in ("linux", "freebsd", "windows")]
+    selected = [h for h in data.get("hosts", []) if h.get("os_family") in ("linux", "freebsd", "macos", "windows")]
     if not selected:
         return jsonify({"error": "Aucune machine éligible (Linux/FreeBSD/Windows) sélectionnée."}), 400
     boot_user = (data.get("boot_user") or "").strip()
@@ -416,7 +423,7 @@ def api_seed():
 
     families = {h["os_family"] for h in selected}
     playbooks: list[str] = []
-    if families & {"linux", "freebsd"}:
+    if families & {"linux", "freebsd", "macos"}:
         playbooks.append("seed-unix.yml")
     if "windows" in families:
         playbooks.append("seed-windows.yml")

@@ -17,5 +17,12 @@ filebeat_tls_enabled: false
 filebeat_tls_ca: 'C:\Program Files\Filebeat\certs\ca.crt'
 filebeat_extra_fields:
   managed_by: "ansible"
-filebeat_log_paths:
-  - 'C:\inetpub\logs\LogFiles\*\*.log'
+
+# Journaux d'événements Windows collectés (l'équivalent des "modules" côté Windows).
+filebeat_win_channels:
+  - Security
+  - System
+  - Application
+
+# Fichiers de logs applicatifs Windows éventuels (vide par défaut).
+filebeat_win_log_paths: []

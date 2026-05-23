@@ -11,6 +11,7 @@
   --accent-dim: #1d6f68;
   --linux: #e8a33d;
   --windows: #4d9be6;
+  --macos: #b6bcc4;
   --freebsd: #d8443c;
   --unknown: #5b6a69;
   --ok: #5fcf6b;
@@ -128,6 +129,7 @@ input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; c
 .chip { font-size: 10px; letter-spacing: 1px; padding: 3px 9px; border: 1px solid var(--line-bright); text-transform: uppercase; }
 .chip.linux { color: var(--linux); border-color: var(--linux); }
 .chip.windows { color: var(--windows); border-color: var(--windows); }
+.chip.macos { color: var(--macos); border-color: var(--macos); }
 .chip.freebsd { color: var(--freebsd); border-color: var(--freebsd); }
 .chip.unknown { color: var(--unknown); border-color: var(--unknown); }
 
@@ -157,10 +159,14 @@ select.os-pick {
 }
 select.os-pick.linux { color: var(--linux); border-color: var(--linux); }
 select.os-pick.windows { color: var(--windows); border-color: var(--windows); }
+select.os-pick.macos { color: var(--macos); border-color: var(--macos); }
 select.os-pick.freebsd { color: var(--freebsd); border-color: var(--freebsd); }
 select.os-pick.unknown { color: var(--unknown); border-color: var(--unknown); }
 
 .svc { display: inline-block; font-size: 10px; padding: 1px 6px; margin: 1px; border: 1px solid var(--line-bright); color: var(--txt-dim); }
+.svc.ssh.ok { color: var(--ok); border-color: var(--ok); }
+.svc.ssh.no { color: var(--err); border-color: var(--err); opacity: .8; }
+.os-detected { font-size: 10px; color: var(--txt-faint); margin-top: 3px; max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .appliance-tag { font-size: 9px; color: var(--freebsd); letter-spacing: 1px; margin-left: 6px; }
 
 /* état : en ligne / hors-ligne + déployé */

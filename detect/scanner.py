@@ -12,15 +12,21 @@ Classement de l'OS :
     - SSH (22) autre               -> linux
     - rien d'identifiable          -> unknown
 
-Pur Python : ping système + scan TCP + lecture de bannière SSH.
-Pas de root, pas de nmap requis.
+Deux moteurs :
+    - nmap (préféré) si présent + privilèges raw : découverte ARP (trouve les
+      machines silencieuses), détection d'OS fiable (Linux/Windows/BSD/macOS/Android...).
+    - repli pur Python (ping + scan TCP + bannière SSH) si nmap absent : pas de
+      root requis, mais détection d'OS plus limitée.
 """
 from __future__ import annotations
 
 import ipaddress
+import os
 import platform
+import shutil
 import socket
 import subprocess
+import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 PROBE_PORTS = {
@@ -131,13 +137,14 @@ def scan_host(host: str, do_ping: bool, port_timeout: float) -> dict | None:
         "open_ports": sorted(open_ports),
         "services": sorted(PROBE_PORTS[p] for p in open_ports),
         "os_family": os_family,
+        "os_name": None,            # le chemin Python ne fait pas de fingerprint OS détaillé
         "ansible_connection": connection,
         "appliance": extra.get("appliance"),
         "winrm_port": extra.get("winrm_port"),
     }
 
 
-def scan_network(
+def scan_network_python(
     cidrs: list[str],
     workers: int = 128,
     do_ping: bool = True,
@@ -169,3 +176,143 @@ def scan_network(
 
     found.sort(key=lambda d: ipaddress.ip_address(d["ip"]))
     return found
+
+
+# ===========================================================================
+# Moteur nmap (préféré si disponible + privilèges raw socket)
+# ===========================================================================
+# nmap apporte : découverte ARP (trouve les machines silencieuses, même sans
+# port ouvert), détection d'OS (-O) bien plus fiable que la bannière, et la
+# détection de tout type d'OS (macOS, Android, équipements réseau...).
+# Repli automatique sur le moteur Python si nmap absent ou sans privilèges.
+
+NMAP_PORTS = "22,80,443,3389,5985,5986"
+
+
+def nmap_available() -> bool:
+    return shutil.which("nmap") is not None
+
+
+def _can_raw() -> bool:
+    """nmap -O / ARP exigent des sockets raw (root, ou CAP_NET_RAW dans le conteneur)."""
+    try:
+        return hasattr(os, "geteuid") and os.geteuid() == 0
+    except OSError:
+        return False
+
+
+def _map_os(osfamily: str | None, os_name: str | None, open_ports: set[int]) -> tuple[str, str | None]:
+    """nmap osfamily -> (os_family déployable parmi linux/freebsd/windows/unknown, appliance)."""
+    name = (os_name or "").lower()
+    if "opnsense" in name:
+        return "freebsd", "opnsense"
+    if "pfsense" in name:
+        return "freebsd", "pfsense"
+    fam = (osfamily or "").lower()
+    if fam == "linux":
+        return "linux", None
+    if fam == "windows":
+        return "windows", None
+    if fam == "freebsd":
+        return "freebsd", None
+    if fam in ("mac os x", "macos", "darwin"):
+        return "macos", None
+    if fam:
+        # OS reconnu mais non déployable (macOS, Android, iOS, embarqué...) :
+        # visible via os_name, mais traité "unknown" côté déploiement.
+        return "unknown", None
+    # nmap n'a pas conclu sur l'OS : on déduit des ports.
+    if {5985, 5986, 3389} & open_ports:
+        return "windows", None
+    if 22 in open_ports:
+        return "linux", None
+    return "unknown", None
+
+
+def _parse_nmap_xml(xml_text: str) -> list[dict]:
+    root = ET.fromstring(xml_text)
+    results: list[dict] = []
+    for host in root.findall("host"):
+        status = host.find("status")
+        if status is not None and status.get("state") != "up":
+            continue
+
+        ip = next((a.get("addr") for a in host.findall("address")
+                   if a.get("addrtype") == "ipv4"), None)
+        if not ip:
+            continue
+
+        hn = host.find("hostnames/hostname")
+        hostname = hn.get("name") if (hn is not None and hn.get("name")) else ip
+
+        open_ports = {
+            int(p.get("portid"))
+            for p in host.findall("ports/port")
+            if (p.find("state") is not None and p.find("state").get("state") == "open")
+        }
+
+        os_name = None
+        osfamily = None
+        osm = host.find("os/osmatch")
+        if osm is not None:
+            os_name = osm.get("name")
+            oc = osm.find("osclass")
+            if oc is not None:
+                osfamily = oc.get("osfamily")
+
+        os_family, appliance = _map_os(osfamily, os_name, open_ports)
+
+        if 22 in open_ports:
+            connection = "ssh"
+        elif {5985, 5986} & open_ports:
+            connection = "winrm"
+        else:
+            connection = None
+
+        winrm_port = 5986 if 5986 in open_ports else (5985 if 5985 in open_ports else None)
+
+        results.append({
+            "ip": ip,
+            "hostname": hostname,
+            "open_ports": sorted(open_ports),
+            "services": sorted(PROBE_PORTS[p] for p in open_ports if p in PROBE_PORTS),
+            "os_family": os_family,
+            "os_name": os_name,
+            "ansible_connection": connection,
+            "appliance": appliance,
+            "winrm_port": winrm_port,
+        })
+    return results
+
+
+def scan_network_nmap(cidrs: list[str], do_ping: bool = True, port_timeout: float = 0.6) -> list[dict]:
+    """Scan via nmap : découverte + ports + détection d'OS, sortie XML parsée."""
+    cmd = ["nmap", "-O", "--osscan-guess", "-p", NMAP_PORTS, "-T4", "-oX", "-"]
+    if not do_ping:
+        cmd.append("-Pn")   # ne pas faire la découverte, traiter tout comme actif
+    cmd += [c.strip() for c in cidrs if c.strip()]
+
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=900)
+    if proc.returncode != 0 or not proc.stdout.strip():
+        raise RuntimeError(f"nmap a échoué (rc={proc.returncode}): {proc.stderr.strip()[:200]}")
+
+    hosts = _parse_nmap_xml(proc.stdout)
+    hosts.sort(key=lambda d: ipaddress.ip_address(d["ip"]))
+    return hosts
+
+
+def scan_network(
+    cidrs: list[str],
+    workers: int = 128,
+    do_ping: bool = True,
+    port_timeout: float = 0.6,
+    progress=None,
+) -> list[dict]:
+    """Point d'entrée : nmap si dispo + privilèges, sinon repli sur le moteur Python."""
+    if nmap_available() and _can_raw():
+        try:
+            return scan_network_nmap(cidrs, do_ping, port_timeout)
+        except Exception:
+            # nmap a planté (privilèges, réseau...) -> on retombe sur le moteur Python.
+            pass
+    return scan_network_python(cidrs, workers, do_ping, port_timeout, progress)

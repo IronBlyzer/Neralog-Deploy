@@ -13,9 +13,9 @@
     state: present
     arguments: "/quiet"
 
-- name: Déployer la configuration filebeat.yml
+- name: Déployer la configuration filebeat.yml (journaux d'événements)
   ansible.windows.win_template:
-    src: ../../filebeat/templates/filebeat.yml.j2
+    src: filebeat-windows.yml.j2
     dest: "{{ filebeat_win_install_dir }}\\filebeat.yml"
   notify: Redémarrer Filebeat (Windows)
 

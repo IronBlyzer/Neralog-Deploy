@@ -1,7 +1,7 @@
 ---
 # deploy-unix.yml — Filebeat sur Linux & FreeBSD (collection community.general).
 - name: Filebeat — Linux & FreeBSD
-  hosts: linux:freebsd
+  hosts: linux:freebsd:macos
   gather_facts: true
   roles:
     - role: filebeat
