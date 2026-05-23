@@ -1,0 +1,31 @@
+---
+# roles/filebeat/tasks/install-debian.yml — Dépôt Elastic + paquet (APT).
+
+- name: S'assurer que les prérequis APT sont présents
+  ansible.builtin.apt:
+    name:
+      - apt-transport-https
+      - gnupg
+      - ca-certificates
+    state: present
+    update_cache: true
+
+- name: Importer la clé GPG Elastic
+  ansible.builtin.get_url:
+    url: https://artifacts.elastic.co/GPG-KEY-elasticsearch
+    dest: /usr/share/keyrings/elastic-keyring.asc
+    mode: "0644"
+
+- name: Ajouter le dépôt Elastic
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [signed-by=/usr/share/keyrings/elastic-keyring.asc]
+      https://artifacts.elastic.co/packages/{{ filebeat_version }}/apt stable main
+    filename: elastic-{{ filebeat_version }}
+    state: present
+    update_cache: true
+
+- name: Installer Filebeat
+  ansible.builtin.apt:
+    name: filebeat
+    state: present

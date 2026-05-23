@@ -1,0 +1,70 @@
+---
+# seed-unix.yml — Établit l'accès par clé sur Linux & FreeBSD.
+#
+# Se connecte avec le compte ADMIN EXISTANT (creds bootstrap, saisis une fois),
+# crée un compte d'automation dédié, y installe la clé publique de la console,
+# et lui donne sudo NOPASSWD. Ensuite : accès à la clé uniquement.
+#
+# Variables attendues (-e) :
+#   console_pubkey  : clé publique de la console
+#   svc_user        : nom du compte d'automation (défaut filebeat-deploy)
+#   lock_bootstrap  : true pour verrouiller le compte admin d'origine après coup
+
+- name: Seeding clé SSH — Linux & FreeBSD
+  hosts: linux:freebsd
+  gather_facts: true
+  become: true
+  vars:
+    svc_user: "{{ svc_user | default('filebeat-deploy') }}"
+  tasks:
+    - name: Créer le compte d'automation dédié
+      ansible.builtin.user:
+        name: "{{ svc_user }}"
+        shell: /bin/sh
+        create_home: true
+        state: present
+
+    - name: Créer le répertoire .ssh
+      ansible.builtin.file:
+        path: "~{{ svc_user }}/.ssh"
+        state: directory
+        owner: "{{ svc_user }}"
+        group: "{{ svc_user }}"
+        mode: "0700"
+
+    - name: Installer la clé publique de la console
+      ansible.builtin.lineinfile:
+        path: "~{{ svc_user }}/.ssh/authorized_keys"
+        line: "{{ console_pubkey }}"
+        create: true
+        owner: "{{ svc_user }}"
+        group: "{{ svc_user }}"
+        mode: "0600"
+        state: present
+
+    # NOTE : Ansible "become" exécute des modules en tant que root ; on ne peut donc
+    # pas restreindre sudo à quelques commandes sans casser le déploiement. Le
+    # durcissement repose ici sur : login PAR CLÉ uniquement + compte dédié +
+    # possibilité de verrouiller le compte admin d'origine (lock_bootstrap).
+    - name: Sudo NOPASSWD pour le compte d'automation (Linux)
+      ansible.builtin.copy:
+        dest: "/etc/sudoers.d/{{ svc_user }}"
+        content: "{{ svc_user }} ALL=(ALL) NOPASSWD: ALL\n"
+        mode: "0440"
+        validate: "visudo -cf %s"
+      when: ansible_os_family != "FreeBSD"
+
+    - name: doas NOPASSWD pour le compte d'automation (FreeBSD)
+      ansible.builtin.lineinfile:
+        path: /usr/local/etc/doas.conf
+        line: "permit nopass {{ svc_user }}"
+        create: true
+        mode: "0644"
+        state: present
+      when: ansible_os_family == "FreeBSD"
+
+    - name: (Option) Verrouiller le compte admin bootstrap
+      ansible.builtin.user:
+        name: "{{ ansible_user }}"
+        password_lock: true
+      when: lock_bootstrap | default(false) | bool

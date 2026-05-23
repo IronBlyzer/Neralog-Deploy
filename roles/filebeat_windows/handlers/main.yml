@@ -1,0 +1,7 @@
+---
+# roles/filebeat_windows/handlers/main.yml
+
+- name: Redémarrer Filebeat (Windows)
+  ansible.windows.win_service:
+    name: filebeat
+    state: restarted

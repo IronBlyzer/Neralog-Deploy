@@ -1,0 +1,32 @@
+---
+# group_vars/all.yml — Configuration centralisée commune à tous les hôtes.
+# C'est ICI qu'on définit où partent les logs (le point "centralisé").
+
+# --- Destination centrale des logs -----------------------------------------
+# Deux modes : "logstash" (recommandé, transformation possible) ou "elasticsearch".
+filebeat_output_type: logstash
+
+# Hôte:port de sortie. Surchargé par l'inventaire (filebeat_output_host) ou par -e.
+filebeat_output_host: "logstash.local:5044"
+
+# Si output Elasticsearch direct (filebeat_output_type: elasticsearch) :
+filebeat_es_hosts:
+  - "https://elastic.local:9200"
+filebeat_es_username: "filebeat_writer"
+filebeat_es_password: "CHANGE_ME"      # à mettre dans un vault Ansible !
+
+# --- Version & modules ------------------------------------------------------
+filebeat_version: "8.x"                 # dépôt Elastic 8.x
+
+# Modules Filebeat activés partout (le module system collecte syslog/auth).
+filebeat_modules:
+  - system
+
+# --- TLS vers Logstash (optionnel mais conseillé en prod) -------------------
+filebeat_tls_enabled: false
+filebeat_tls_ca: "/etc/filebeat/certs/ca.crt"
+
+# --- Champs ajoutés à chaque événement (utile pour filtrer dans Kibana) -----
+filebeat_extra_fields:
+  env: "production"
+  managed_by: "ansible"

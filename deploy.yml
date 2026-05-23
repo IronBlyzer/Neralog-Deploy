@@ -1,0 +1,6 @@
+---
+# deploy.yml — playbook combiné (CLI). Requiert les DEUX collections.
+# L'interface web, elle, ne lance que le playbook nécessaire selon la sélection
+# (un parc 100% Linux n'a donc pas besoin de la collection Windows).
+- import_playbook: deploy-unix.yml
+- import_playbook: deploy-windows.yml

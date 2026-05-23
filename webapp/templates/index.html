@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Filebeat Deployer — Console</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="scanline"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="dot" id="status-dot"></span>
+      <h1>FILEBEAT<span class="thin">·DEPLOYER</span></h1>
+    </div>
+    <div class="meta">console d'administration · scan → sélection → déploiement</div>
+  </header>
+
+  <main>
+    <!-- 01 DÉTECTION -->
+    <section class="panel">
+      <div class="panel-head"><span class="idx">01</span><h2>Détection réseau</h2></div>
+      <div class="panel-body">
+        <label class="field-label">Sous-réseaux (CIDR) — un par ligne</label>
+        <textarea id="cidrs" rows="3" spellcheck="false" placeholder="192.168.1.0/24&#10;10.0.0.0/24"></textarea>
+        <div class="row">
+          <label class="check"><input type="checkbox" id="no-ping"> scan TCP seul (ICMP filtré)</label>
+          <label class="inline-num">timeout <input type="number" id="timeout" value="0.6" step="0.1" min="0.1" max="3"> s</label>
+          <button id="scan-btn" class="btn primary">▶ Lancer le scan</button>
+        </div>
+        <div id="scan-status" class="scan-status"></div>
+      </div>
+    </section>
+
+    <!-- 02 SÉLECTION -->
+    <section class="panel" id="select-panel" hidden>
+      <div class="panel-head"><span class="idx">02</span><h2>Sélection des machines</h2>
+        <div class="counts" id="counts"></div>
+      </div>
+      <div class="panel-body">
+        <div class="toolbar">
+          <div class="bulk">
+            <button class="btn ghost" data-sel="all">tout</button>
+            <button class="btn ghost" data-sel="none">aucun</button>
+            <button class="btn ghost" data-sel="linux">linux</button>
+            <button class="btn ghost" data-sel="windows">windows</button>
+            <button class="btn ghost" data-sel="freebsd">freebsd</button>
+          </div>
+          <input type="text" id="filter" class="filter" placeholder="filtrer…" spellcheck="false">
+        </div>
+        <div class="table-wrap">
+          <table id="hosts-table">
+            <thead>
+              <tr>
+                <th class="cb"><input type="checkbox" id="check-all"></th>
+                <th>état</th><th>hôte</th><th>ip</th><th>os</th><th>services</th><th></th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 03 ACCÈS (clé SSH) -->
+    <section class="panel" id="access-panel" hidden>
+      <div class="panel-head"><span class="idx">03</span><h2>Accès — clé SSH</h2></div>
+      <div class="panel-body">
+        <p class="explain">On dépose la clé de la console sur les machines cochées via leur compte
+          admin existant (mot de passe saisi une fois, jamais stocké). Ensuite : accès à la clé, sans mot de passe.
+          <span class="explain-os">Linux / FreeBSD, et Windows si OpenSSH est activé.</span></p>
+
+        <label class="field-label">Clé publique de la console</label>
+        <div class="keybox">
+          <code id="pubkey">…</code>
+          <button class="btn ghost" id="copy-key">copier</button>
+        </div>
+
+        <div class="grid2">
+          <div>
+            <label class="field-label">Compte admin bootstrap</label>
+            <div class="row tight">
+              <input type="text" id="boot-user" placeholder="utilisateur admin existant">
+              <input type="password" id="boot-pass" placeholder="mot de passe (une fois)">
+            </div>
+          </div>
+          <div class="seed-action">
+            <label class="check"><input type="checkbox" id="lock-boot"> verrouiller le compte bootstrap après</label>
+            <button id="seed-btn" class="btn primary" disabled>🔑 Semer la clé sur <span id="seed-count">0</span></button>
+          </div>
+        </div>
+
+        <div id="seed-console" class="console" hidden>
+          <div class="console-head"><span id="seed-state">…</span><span id="seed-targets"></span></div>
+          <div id="seed-results" class="results"></div>
+          <details class="rawlog"><summary>log brut</summary><pre id="seed-log"></pre></details>
+        </div>
+      </div>
+    </section>
+
+    <!-- 04 DÉPLOIEMENT -->
+    <section class="panel" id="deploy-panel" hidden>
+      <div class="panel-head"><span class="idx">04</span><h2>Déploiement</h2></div>
+      <div class="panel-body">
+        <div class="grid2">
+          <div>
+            <label class="field-label">Sortie centralisée <span class="hint">· depuis .env</span></label>
+            <div class="output-info">
+              <span class="out-badge" id="out-type-badge">logstash</span>
+              <span class="arrow">→</span>
+              <span class="out-host" id="out-host-text">—</span>
+            </div>
+          </div>
+          <div>
+            <label class="field-label">SSH (Linux / FreeBSD)</label>
+            <div class="row tight">
+              <input type="text" id="ssh-user" placeholder="utilisateur ssh (ex: admin)">
+              <input type="password" id="become-pass" placeholder="mot de passe sudo (option)">
+            </div>
+          </div>
+        </div>
+
+        <details class="win-block">
+          <summary>Identifiants Windows (WinRM) — si machines Windows sélectionnées</summary>
+          <div class="row tight">
+            <input type="text" id="win-user" placeholder="utilisateur (ex: Administrator)">
+            <input type="password" id="win-pass" placeholder="mot de passe">
+          </div>
+        </details>
+
+        <div class="row deploy-row">
+          <label class="check"><input type="checkbox" id="dry-run"> simulation (--check, ne modifie rien)</label>
+          <button id="deploy-btn" class="btn primary big" disabled>⬇ Déployer <span id="sel-count">0</span> machine(s)</button>
+        </div>
+
+        <div id="console" class="console" hidden>
+          <div class="console-head"><span id="job-state">…</span><span id="job-targets"></span></div>
+          <div id="results" class="results"></div>
+          <details class="rawlog">
+            <summary>log Ansible brut</summary>
+            <pre id="log"></pre>
+          </details>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>filebeat-deployer · local · 127.0.0.1</footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

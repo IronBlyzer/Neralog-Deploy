@@ -1,0 +1,21 @@
+---
+# roles/filebeat_windows/defaults/main.yml
+
+filebeat_win_version: "8.15.0"
+filebeat_win_msi_url: "https://artifacts.elastic.co/downloads/beats/filebeat/filebeat-{{ filebeat_win_version }}-windows-x86_64.msi"
+filebeat_win_install_dir: 'C:\Program Files\Filebeat'
+
+filebeat_output_type: logstash
+filebeat_output_host: "logstash.local:5044"
+filebeat_es_hosts:
+  - "https://elastic.local:9200"
+filebeat_es_username: "filebeat_writer"
+filebeat_es_password: "CHANGE_ME"
+
+filebeat_modules: []          # modules Windows gérés différemment (PowerShell)
+filebeat_tls_enabled: false
+filebeat_tls_ca: 'C:\Program Files\Filebeat\certs\ca.crt'
+filebeat_extra_fields:
+  managed_by: "ansible"
+filebeat_log_paths:
+  - 'C:\inetpub\logs\LogFiles\*\*.log'

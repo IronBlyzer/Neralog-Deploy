@@ -1,0 +1,7 @@
+---
+# deploy-windows.yml — Filebeat sur Windows (collection ansible.windows).
+- name: Filebeat — Windows
+  hosts: windows
+  gather_facts: true
+  roles:
+    - role: filebeat_windows

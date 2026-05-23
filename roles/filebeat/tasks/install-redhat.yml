@@ -1,0 +1,21 @@
+---
+# roles/filebeat/tasks/install-redhat.yml — Dépôt Elastic + paquet (YUM/DNF).
+
+- name: Importer la clé GPG Elastic
+  ansible.builtin.rpm_key:
+    key: https://artifacts.elastic.co/GPG-KEY-elasticsearch
+    state: present
+
+- name: Ajouter le dépôt Elastic
+  ansible.builtin.yum_repository:
+    name: elastic-{{ filebeat_version }}
+    description: Elastic repository for {{ filebeat_version }} packages
+    baseurl: https://artifacts.elastic.co/packages/{{ filebeat_version }}/yum
+    gpgcheck: true
+    gpgkey: https://artifacts.elastic.co/GPG-KEY-elasticsearch
+    enabled: true
+
+- name: Installer Filebeat
+  ansible.builtin.package:
+    name: filebeat
+    state: present

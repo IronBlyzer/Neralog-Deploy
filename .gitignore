@@ -1,0 +1,57 @@
+# =============================================================================
+# .gitignore — filebeat-deploy
+# =============================================================================
+
+# --- SECRETS : NE JAMAIS COMMITTER (critique pour un repo partagé) -----------
+# Config locale avec identifiants / adresses
+.env
+.env.*
+!.env.example
+
+# Clé privée de la console = accès à TOUT le parc. Jamais sur GitHub.
+data/
+**/console_id_*
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+
+# Inventaires générés (peuvent contenir des creds)
+inventory/hosts.yml
+**/fb_inv_*
+**/fb_seed_*
+
+# Ansible Vault déchiffré / fichiers de secrets
+*vault*.yml
+!*vault*.example.yml
+
+# --- Python ------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+
+# --- Ansible -----------------------------------------------------------------
+*.retry
+.ansible/
+collections/
+
+# --- Node (si build front un jour) ------------------------------------------
+node_modules/
+
+# --- Logs & temporaires ------------------------------------------------------
+*.log
+*.tmp
+*.bak
+
+# --- Éditeurs / OS -----------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini

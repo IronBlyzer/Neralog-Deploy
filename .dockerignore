@@ -1,0 +1,8 @@
+.env
+.git
+__pycache__/
+*.pyc
+.venv/
+inventory/hosts.yml
+*.md
+data/

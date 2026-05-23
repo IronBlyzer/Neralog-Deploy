@@ -1,0 +1,26 @@
+---
+# roles/filebeat/tasks/install-freebsd.yml — FreeBSD / pfSense / OPNsense (pkgng).
+#
+# NOTE IMPORTANTE sur les APPLIANCES :
+#   pfSense et OPNsense sont des appliances : installer Filebeat via pkg n'est PAS
+#   la voie recommandée (système verrouillé, plugins propres). Pour ces équipements,
+#   la bonne pratique est de configurer leur SYSLOG DISTANT vers Logstash/ELK.
+#   Ce rôle ne tente l'installation que sur du FreeBSD "serveur" classique.
+
+- name: Refuser l'installation sur une appliance pfSense/OPNsense
+  ansible.builtin.fail:
+    msg: >-
+      {{ inventory_hostname }} semble être une appliance ({{ appliance | default('inconnue') }}).
+      Configure plutôt le syslog distant vers {{ filebeat_output_host }} (voir README).
+  when: appliance is defined and appliance in ["pfsense", "opnsense"]
+
+- name: Installer Filebeat via pkgng
+  community.general.pkgng:
+    name: "{{ filebeat_freebsd_package }}"
+    state: present
+
+- name: Créer le répertoire de configuration si absent
+  ansible.builtin.file:
+    path: "{{ filebeat_config_dir }}"
+    state: directory
+    mode: "0755"

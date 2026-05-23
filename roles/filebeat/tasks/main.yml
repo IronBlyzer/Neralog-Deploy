@@ -1,0 +1,54 @@
+---
+# roles/filebeat/tasks/main.yml — Linux (Debian/RedHat) + FreeBSD.
+
+- name: Définir les chemins selon l'OS
+  ansible.builtin.set_fact:
+    filebeat_config_dir: "{{ '/usr/local/etc/filebeat' if ansible_os_family == 'FreeBSD' else '/etc/filebeat' }}"
+
+- name: Installer (Debian/Ubuntu)
+  ansible.builtin.include_tasks: install-debian.yml
+  when: ansible_os_family == "Debian"
+  tags: [install]
+
+- name: Installer (RHEL/CentOS/Rocky)
+  ansible.builtin.include_tasks: install-redhat.yml
+  when: ansible_os_family == "RedHat"
+  tags: [install]
+
+- name: Installer (FreeBSD)
+  ansible.builtin.include_tasks: install-freebsd.yml
+  when: ansible_os_family == "FreeBSD"
+  tags: [install]
+
+- name: Échouer proprement si l'OS n'est pas géré
+  ansible.builtin.fail:
+    msg: "OS non supporté : {{ ansible_os_family }} ({{ ansible_distribution | default('?') }})"
+  when: ansible_os_family not in ["Debian", "RedHat", "FreeBSD"]
+
+- name: Déployer la configuration filebeat.yml
+  ansible.builtin.template:
+    src: filebeat.yml.j2
+    dest: "{{ filebeat_config_dir }}/filebeat.yml"
+    mode: "0600"
+    backup: true
+    validate: "filebeat test config -c %s"
+  notify: Redémarrer Filebeat
+  tags: [config]
+
+- name: Activer les modules Filebeat
+  ansible.builtin.command:
+    cmd: "filebeat modules enable {{ item }}"
+  loop: "{{ filebeat_modules }}"
+  register: module_enable
+  changed_when: "'Enabled' in module_enable.stdout"
+  failed_when:
+    - module_enable.rc != 0
+    - "'already enabled' not in module_enable.stdout"
+  tags: [config]
+
+- name: Activer et démarrer le service Filebeat
+  ansible.builtin.service:
+    name: filebeat
+    state: started
+    enabled: true
+  tags: [service]

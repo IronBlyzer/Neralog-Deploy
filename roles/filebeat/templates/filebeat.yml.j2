@@ -1,0 +1,62 @@
+# {{ ansible_managed }}
+# filebeat.yml — généré par Ansible. Ne pas éditer à la main.
+
+# ===========================================================================
+# Entrées : ce que Filebeat collecte
+# ===========================================================================
+filebeat.inputs:
+  - type: filestream
+    id: default-logs
+    enabled: true
+    paths:
+{% for path in filebeat_log_paths %}
+      - {{ path }}
+{% endfor %}
+
+# Découverte automatique des modules (system, nginx, etc.)
+filebeat.config.modules:
+  path: ${path.config}/modules.d/*.yml
+  reload.enabled: true
+
+# ===========================================================================
+# Champs ajoutés à chaque événement
+# ===========================================================================
+fields_under_root: true
+fields:
+{% for key, value in filebeat_extra_fields.items() %}
+  {{ key }}: "{{ value }}"
+{% endfor %}
+  hostname: "{{ inventory_hostname }}"
+
+# ===========================================================================
+# Sortie centralisée
+# ===========================================================================
+{% if filebeat_output_type == "logstash" %}
+output.logstash:
+  hosts: ["{{ filebeat_output_host }}"]
+{% if filebeat_tls_enabled %}
+  ssl.certificate_authorities: ["{{ filebeat_tls_ca }}"]
+{% endif %}
+{% elif filebeat_output_type == "elasticsearch" %}
+output.elasticsearch:
+  hosts:
+{% for es in filebeat_es_hosts %}
+    - "{{ es }}"
+{% endfor %}
+  username: "{{ filebeat_es_username }}"
+  password: "{{ filebeat_es_password }}"
+{% if filebeat_tls_enabled %}
+  ssl.certificate_authorities: ["{{ filebeat_tls_ca }}"]
+{% endif %}
+{% endif %}
+
+# ===========================================================================
+# Divers
+# ===========================================================================
+logging.level: info
+logging.to_files: true
+logging.files:
+  path: /var/log/filebeat
+  name: filebeat
+  keepfiles: 7
+  permissions: "0640"

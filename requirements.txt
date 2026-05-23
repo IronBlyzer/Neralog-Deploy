@@ -1,0 +1,10 @@
+# Interface web
+flask>=3.0
+pyyaml>=6.0
+python-dotenv>=1.0
+
+# Déploiement
+ansible>=9.0
+
+# Cibles Windows (WinRM)
+pywinrm>=0.4

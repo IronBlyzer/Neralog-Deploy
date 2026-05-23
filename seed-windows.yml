@@ -1,0 +1,41 @@
+---
+# seed-windows.yml — Établit l'accès par clé sur Windows via OpenSSH.
+#
+# ⚠️ À VALIDER SUR WINDOWS RÉEL (non testé hors environnement Windows).
+# Prérequis : le serveur OpenSSH intégré à Windows doit être ACTIVÉ au préalable
+# (étape documentée dans la doc d'installation à venir). On se connecte alors en
+# SSH comme pour Linux.
+#
+# Particularités Windows :
+#   - pas de sudo : le compte d'automation est mis dans le groupe Administrateurs ;
+#   - les clés des comptes admin vont dans C:\ProgramData\ssh\administrators_authorized_keys
+#     (et non dans le profil utilisateur), avec des ACL strictes.
+
+- name: Seeding clé SSH — Windows (OpenSSH)
+  hosts: windows
+  gather_facts: true
+  vars:
+    svc_user: "{{ svc_user | default('filebeat-deploy') }}"
+  tasks:
+    - name: Créer le compte d'automation
+      ansible.windows.win_user:
+        name: "{{ svc_user }}"
+        password: "{{ svc_user_password | default(lookup('password', '/dev/null length=24')) }}"
+        groups:
+          - Administrators
+        state: present
+
+    - name: Installer la clé publique (administrators_authorized_keys)
+      ansible.windows.win_lineinfile:
+        path: 'C:\ProgramData\ssh\administrators_authorized_keys'
+        line: "{{ console_pubkey }}"
+        create: true
+        state: present
+
+    - name: Appliquer les ACL requises par OpenSSH sur le fichier de clés
+      ansible.windows.win_acl:
+        path: 'C:\ProgramData\ssh\administrators_authorized_keys'
+        user: Administrators
+        rights: FullControl
+        type: allow
+        inherit: None

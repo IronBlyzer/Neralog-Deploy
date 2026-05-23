@@ -1,0 +1,25 @@
+---
+# roles/filebeat/defaults/main.yml — Valeurs par défaut (surchargeables).
+
+filebeat_version: "8.x"
+filebeat_freebsd_package: "beats8"   # paquet pkgng fournissant filebeat (8.x)
+filebeat_output_type: logstash
+filebeat_output_host: "logstash.local:5044"
+
+filebeat_es_hosts:
+  - "https://elastic.local:9200"
+filebeat_es_username: "filebeat_writer"
+filebeat_es_password: "CHANGE_ME"
+
+filebeat_modules:
+  - system
+
+filebeat_tls_enabled: false
+filebeat_tls_ca: "/etc/filebeat/certs/ca.crt"
+
+filebeat_extra_fields:
+  managed_by: "ansible"
+
+# Chemins de logs additionnels à ramasser (en plus des modules).
+filebeat_log_paths:
+  - /var/log/*.log

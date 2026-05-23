@@ -1,0 +1,7 @@
+---
+# roles/filebeat/handlers/main.yml
+
+- name: Redémarrer Filebeat
+  ansible.builtin.service:
+    name: filebeat
+    state: restarted

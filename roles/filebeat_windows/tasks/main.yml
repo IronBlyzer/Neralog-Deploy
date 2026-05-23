@@ -1,0 +1,26 @@
+---
+# roles/filebeat_windows/tasks/main.yml — Installation MSI + conf via WinRM.
+# Prérequis contrôleur : pip install pywinrm ; WinRM activé côté cible.
+
+- name: Télécharger le MSI Filebeat
+  ansible.windows.win_get_url:
+    url: "{{ filebeat_win_msi_url }}"
+    dest: 'C:\Windows\Temp\filebeat.msi'
+
+- name: Installer Filebeat (MSI)
+  ansible.windows.win_package:
+    path: 'C:\Windows\Temp\filebeat.msi'
+    state: present
+    arguments: "/quiet"
+
+- name: Déployer la configuration filebeat.yml
+  ansible.windows.win_template:
+    src: ../../filebeat/templates/filebeat.yml.j2
+    dest: "{{ filebeat_win_install_dir }}\\filebeat.yml"
+  notify: Redémarrer Filebeat (Windows)
+
+- name: Activer et démarrer le service Filebeat
+  ansible.windows.win_service:
+    name: filebeat
+    state: started
+    start_mode: auto

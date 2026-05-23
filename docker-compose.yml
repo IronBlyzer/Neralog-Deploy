@@ -1,0 +1,30 @@
+services:
+  console:
+    build: .
+    image: filebeat-deployer-console
+    container_name: filebeat-console
+
+    # IMPORTANT : indispensable pour scanner le LAN et joindre les hôtes en SSH.
+    # Un réseau bridge isolerait le conteneur du réseau local du client.
+    # (Linux uniquement ; sous Docker Desktop Mac/Windows, host networking diffère.)
+    network_mode: host
+
+    # Toute la config vient du .env (à la racine du projet).
+    env_file: .env
+
+    cap_add:
+      - NET_RAW            # autorise le ping ICMP depuis le conteneur
+
+    volumes:
+      # Optionnel : monter les clés SSH de l'admin pour l'auth par clé.
+      # Sinon, l'auth par mot de passe se fait via l'interface au déploiement.
+      - ${HOME}/.ssh:/root/.ssh:ro
+      # Inventaire de parc persistant (survit aux redémarrages) :
+      - ./data:/app/data
+
+    restart: unless-stopped
+
+# Lancement :
+#   cp .env.example .env   # puis adapter
+#   docker compose up -d --build
+#   -> http://<ip-de-la-box>:5000
