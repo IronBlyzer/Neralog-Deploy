@@ -58,6 +58,14 @@ le LAN et joindre les hôtes en SSH (un réseau bridge isolerait le conteneur du
 réseau local). Les clés SSH de l'admin sont montées en lecture seule (`~/.ssh`) ;
 sinon l'auth par mot de passe se fait via l'interface.
 
+### Sous Portainer (stack)
+
+Le compose **n'exige pas** de fichier `.env` (qui est gitignoré, donc absent du
+repo). Déploie la stack depuis le repo Git, puis renseigne la config dans la
+section **« Environment variables »** de Portainer — au minimum
+`FILEBEAT_OUTPUT_HOST` et `BOOTSTRAP_USER`. Les variables non fournies prennent
+leurs valeurs par défaut. Inutile de créer un `.env` à la main.
+
 > Le build exécute `ansible-galaxy collection install` : un accès à
 > galaxy.ansible.com est requis au moment du build.
 
