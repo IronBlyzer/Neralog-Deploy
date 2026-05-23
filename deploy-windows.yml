@@ -3,5 +3,6 @@
 - name: Filebeat — Windows
   hosts: windows
   gather_facts: true
+  become: false              # Windows : pas de sudo (session SSH admin déjà élevée)
   roles:
     - role: filebeat_windows
