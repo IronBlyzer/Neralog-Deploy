@@ -126,6 +126,8 @@ def scan_host(host: str, do_ping: bool, port_timeout: float) -> dict | None:
         # Vivant au ping mais aucun port ouvert : visibilité seule, non déployable.
         os_family, connection, extra = "unknown", None, {}
 
+    os_name = _distro_from_text(extra.get("ssh_banner", ""))   # distro lue dans la bannière SSH
+
     try:
         hostname = socket.gethostbyaddr(host)[0]
     except (socket.herror, socket.gaierror, OSError):
@@ -137,7 +139,7 @@ def scan_host(host: str, do_ping: bool, port_timeout: float) -> dict | None:
         "open_ports": sorted(open_ports),
         "services": sorted(PROBE_PORTS[p] for p in open_ports),
         "os_family": os_family,
-        "os_name": None,            # le chemin Python ne fait pas de fingerprint OS détaillé
+        "os_name": os_name,         # distro lue dans la bannière SSH (ou None)
         "ansible_connection": connection,
         "appliance": extra.get("appliance"),
         "winrm_port": extra.get("winrm_port"),
@@ -201,13 +203,59 @@ def _can_raw() -> bool:
         return False
 
 
-def _map_os(osfamily: str | None, os_name: str | None, open_ports: set[int]) -> tuple[str, str | None]:
-    """nmap osfamily -> (os_family déployable parmi linux/freebsd/windows/unknown, appliance)."""
-    name = (os_name or "").lower()
-    if "opnsense" in name:
+# Distros / OS reconnaissables dans les bannières de service ou l'OS nmap.
+# (motif recherché, libellé affiché)
+DISTRO_PATTERNS = [
+    ("opnsense", "OPNsense"), ("pfsense", "pfSense"),
+    ("raspbian", "Raspbian"), ("ubuntu", "Ubuntu"), ("debian", "Debian"),
+    ("linux mint", "Linux Mint"), ("kali", "Kali"),
+    ("almalinux", "AlmaLinux"), ("rocky", "Rocky Linux"), ("centos", "CentOS"),
+    ("red hat", "Red Hat"), ("rhel", "RHEL"), ("fedora", "Fedora"),
+    ("amazon linux", "Amazon Linux"), ("alpine", "Alpine"),
+    ("opensuse", "openSUSE"), ("suse", "SUSE"), ("arch linux", "Arch Linux"),
+    ("freebsd", "FreeBSD"), ("openbsd", "OpenBSD"), ("netbsd", "NetBSD"),
+    ("windows", "Windows"),
+    ("mac os x", "macOS"), ("macos", "macOS"), ("darwin", "macOS"),
+    ("android", "Android"),
+]
+
+
+def _distro_from_text(text: str | None) -> str | None:
+    """Extrait un libellé de distro/OS d'une bannière (ex: '...OpenSSH 8.9 Ubuntu...' -> 'Ubuntu')."""
+    t = (text or "").lower()
+    for token, pretty in DISTRO_PATTERNS:
+        if token in t:
+            return pretty
+    return None
+
+
+def _family_from_distro(pretty: str | None) -> str | None:
+    """Libellé de distro -> famille déployable (ou None si non concluant)."""
+    if not pretty:
+        return None
+    p = pretty.lower()
+    if p in ("opnsense", "pfsense", "freebsd"):
+        return "freebsd"
+    if p == "windows":
+        return "windows"
+    if p == "macos":
+        return "macos"
+    if p in ("openbsd", "netbsd", "android"):
+        return "unknown"     # détecté mais non déployable
+    return "linux"           # toutes les autres = distros Linux
+
+
+def _map_os(osfamily: str | None, os_name: str | None, open_ports: set[int],
+            distro: str | None = None) -> tuple[str, str | None]:
+    """(famille nmap + distro lue dans les bannières) -> (os_family déployable, appliance)."""
+    dl = (distro or "").lower()
+    if dl == "opnsense":
         return "freebsd", "opnsense"
-    if "pfsense" in name:
+    if dl == "pfsense":
         return "freebsd", "pfsense"
+    fam_from_distro = _family_from_distro(distro)
+    if fam_from_distro:
+        return fam_from_distro, None
     fam = (osfamily or "").lower()
     if fam == "linux":
         return "linux", None
@@ -218,10 +266,10 @@ def _map_os(osfamily: str | None, os_name: str | None, open_ports: set[int]) -> 
     if fam in ("mac os x", "macos", "darwin"):
         return "macos", None
     if fam:
-        # OS reconnu mais non déployable (macOS, Android, iOS, embarqué...) :
+        # OS reconnu mais non déployable (Android, iOS, embarqué...) :
         # visible via os_name, mais traité "unknown" côté déploiement.
         return "unknown", None
-    # nmap n'a pas conclu sur l'OS : on déduit des ports.
+    # Rien de concluant : on déduit des ports.
     if {5985, 5986, 3389} & open_ports:
         return "windows", None
     if 22 in open_ports:
@@ -260,7 +308,24 @@ def _parse_nmap_xml(xml_text: str) -> list[dict]:
             if oc is not None:
                 osfamily = oc.get("osfamily")
 
-        os_family, appliance = _map_os(osfamily, os_name, open_ports)
+        # Bannières de service (-sV) : révèlent souvent la distro exacte (ex: SSH Ubuntu).
+        svc_blob = " ".join(
+            " ".join(filter(None, [s.get("product"), s.get("version"), s.get("extrainfo"), s.get("ostype")]))
+            for s in (p.find("service") for p in host.findall("ports/port")) if s is not None
+        )
+        distro = _distro_from_text(svc_blob) or _distro_from_text(os_name)
+
+        os_family, appliance = _map_os(osfamily, os_name, open_ports, distro)
+
+        # os_name affiché : on garde la chaîne la plus informative.
+        if distro and os_name and distro.lower() in os_name.lower():
+            display_os = os_name                       # l'OS nmap contient déjà la distro (ex: "Windows 10")
+        elif distro and os_name:
+            display_os = f"{distro} · {os_name}"        # ex: "Ubuntu · Linux 5.0 - 5.4"
+        elif distro:
+            display_os = distro                         # ex: "Ubuntu" (bannière SSH, sans -O concluant)
+        else:
+            display_os = os_name
 
         if 22 in open_ports:
             connection = "ssh"
@@ -277,7 +342,7 @@ def _parse_nmap_xml(xml_text: str) -> list[dict]:
             "open_ports": sorted(open_ports),
             "services": sorted(PROBE_PORTS[p] for p in open_ports if p in PROBE_PORTS),
             "os_family": os_family,
-            "os_name": os_name,
+            "os_name": display_os,
             "ansible_connection": connection,
             "appliance": appliance,
             "winrm_port": winrm_port,
@@ -287,7 +352,7 @@ def _parse_nmap_xml(xml_text: str) -> list[dict]:
 
 def scan_network_nmap(cidrs: list[str], do_ping: bool = True, port_timeout: float = 0.6) -> list[dict]:
     """Scan via nmap : découverte + ports + détection d'OS, sortie XML parsée."""
-    cmd = ["nmap", "-O", "--osscan-guess", "-p", NMAP_PORTS, "-T4", "-oX", "-"]
+    cmd = ["nmap", "-O", "--osscan-guess", "-sV", "--version-light", "-p", NMAP_PORTS, "-T4", "-oX", "-"]
     if not do_ping:
         cmd.append("-Pn")   # ne pas faire la découverte, traiter tout comme actif
     cmd += [c.strip() for c in cidrs if c.strip()]

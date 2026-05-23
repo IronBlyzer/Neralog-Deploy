@@ -111,7 +111,8 @@ function renderTable() {
   tbody.innerHTML = "";
 
   HOSTS.filter((h) =>
-    !filter || h.ip.includes(filter) || (h.hostname || "").toLowerCase().includes(filter) || h.os_family.includes(filter)
+    !filter || h.ip.includes(filter) || (h.hostname || "").toLowerCase().includes(filter)
+      || h.os_family.includes(filter) || (h.os_name || "").toLowerCase().includes(filter)
   ).forEach((h) => {
     const os = h.os_family;
     const tr = document.createElement("tr");
