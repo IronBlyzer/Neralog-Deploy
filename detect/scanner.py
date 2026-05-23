@@ -97,16 +97,28 @@ def classify(host: str, open_ports: set[int], port_timeout: float) -> tuple[str,
 
 
 def scan_host(host: str, do_ping: bool, port_timeout: float) -> dict | None:
-    """Scanne un hôte unique. Retourne un dict descriptif ou None si rien."""
-    if do_ping and not is_alive(host):
+    """Scanne un hôte unique. Retourne un dict descriptif ou None si l'hôte est absent.
+
+    Un hôte vivant au ping mais sans port de gestion ouvert est tout de même listé
+    (services vides, OS « unknown ») : visible dans l'inventaire, mais non déployable
+    tant qu'aucun accès (SSH/WinRM) n'est ouvert dessus.
+    """
+    alive = is_alive(host) if do_ping else False
+    if not alive:
+        # Pas de réponse au ping : on ne garde l'hôte que s'il a un port de gestion.
+        # Pré-filtre rapide pour ne pas scanner intégralement un /24 majoritairement vide.
         if not any(probe_port(host, p, port_timeout) for p in (22, 5985, 3389)):
             return None
 
     open_ports = {p for p in PROBE_PORTS if probe_port(host, p, port_timeout)}
-    if not open_ports:
+    if not open_ports and not alive:
         return None
 
-    os_family, connection, extra = classify(host, open_ports, port_timeout)
+    if open_ports:
+        os_family, connection, extra = classify(host, open_ports, port_timeout)
+    else:
+        # Vivant au ping mais aucun port ouvert : visibilité seule, non déployable.
+        os_family, connection, extra = "unknown", None, {}
 
     try:
         hostname = socket.gethostbyaddr(host)[0]
