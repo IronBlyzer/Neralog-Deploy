@@ -6,6 +6,7 @@
 # Config locale avec identifiants / adresses
 .env
 .env.*
+stack.env
 !.env.example
 
 # Clé privée de la console = accès à TOUT le parc. Jamais sur GitHub.

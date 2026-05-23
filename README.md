@@ -47,6 +47,9 @@ d'avance — l'UI le pré-remplit), `FILEBEAT_TLS_ENABLED`, `DEFAULT_CIDRS`,
 
 ## Lancement en conteneur (recommandé)
 
+> Prérequis : **Docker Compose v2.24+** (la config `env_file` optionnelle l'exige).
+> Toute install Docker/Portainer récente l'a.
+
 ```bash
 cp .env.example .env
 docker compose up -d --build
@@ -60,11 +63,15 @@ sinon l'auth par mot de passe se fait via l'interface.
 
 ### Sous Portainer (stack)
 
-Le compose **n'exige pas** de fichier `.env` (qui est gitignoré, donc absent du
-repo). Déploie la stack depuis le repo Git, puis renseigne la config dans la
-section **« Environment variables »** de Portainer — au minimum
-`FILEBEAT_OUTPUT_HOST` et `BOOTSTRAP_USER`. Les variables non fournies prennent
-leurs valeurs par défaut. Inutile de créer un `.env` à la main.
+Le compose charge la config via `env_file` en mode **optionnel** : `stack.env`
+(généré par Portainer à partir des variables que tu définis dans l'UI) et `.env`
+(pour le local). Aucun fichier n'est obligatoire — les variables absentes prennent
+leurs valeurs par défaut.
+
+Déploie la stack depuis le repo Git, puis renseigne la config dans
+**« Environment variables »** — au minimum `FILEBEAT_OUTPUT_HOST` et
+`BOOTSTRAP_USER`. Avantage : tu peux ajouter/modifier une variable dans Portainer
+**sans toucher au compose**, donc il reste synchro avec le repo Git.
 
 > Le build exécute `ansible-galaxy collection install` : un accès à
 > galaxy.ansible.com est requis au moment du build.

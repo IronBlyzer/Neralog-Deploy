@@ -3,4 +3,5 @@
 #   ansible-galaxy collection install -r requirements.yml
 collections:
   - name: community.general      # module pkgng (FreeBSD)
-  - name: ansible.windows        # win_get_url / win_package / win_service (Windows)
+  - name: ansible.windows        # win_get_url / win_package / win_service / win_user / win_acl
+  - name: community.windows      # win_lineinfile (clé Windows)

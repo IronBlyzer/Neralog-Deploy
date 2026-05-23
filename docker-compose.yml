@@ -5,41 +5,40 @@ services:
     container_name: filebeat-console
 
     # IMPORTANT : indispensable pour scanner le LAN et joindre les hôtes en SSH.
-    # Un réseau bridge isolerait le conteneur du réseau local du client.
     network_mode: host
 
     cap_add:
       - NET_RAW            # autorise le ping ICMP depuis le conteneur
 
-    # Configuration via variables d'environnement (PAS de fichier .env requis).
-    # - En local : un .env à côté du compose remplit ces ${...} automatiquement.
-    # - Sous Portainer : renseigne-les dans la section "Environment variables".
-    # - Si rien n'est fourni, les valeurs par défaut (:-) s'appliquent.
+    # Toute la config utilisateur vient de variables d'environnement :
+    #   - Portainer : définies dans l'UI -> écrites dans stack.env -> chargées ici.
+    #     (tu peux ajouter une variable dans Portainer sans toucher au compose,
+    #      donc il reste synchro avec le repo Git.)
+    #   - Local     : un fichier .env à côté du compose.
+    # Les deux sont OPTIONNELS ; l'app a des valeurs par défaut internes.
+    env_file:
+      - path: stack.env
+        required: false
+      - path: .env
+        required: false
+
+    # Défauts adaptés au conteneur (la console doit écouter sur 0.0.0.0).
+    # Surchargeables via les variables ci-dessus.
     environment:
       FLASK_HOST: ${FLASK_HOST:-0.0.0.0}
       FLASK_PORT: ${FLASK_PORT:-5000}
-      FILEBEAT_OUTPUT_TYPE: ${FILEBEAT_OUTPUT_TYPE:-logstash}
-      FILEBEAT_OUTPUT_HOST: ${FILEBEAT_OUTPUT_HOST:-127.0.0.1:5044}
-      FILEBEAT_TLS_ENABLED: ${FILEBEAT_TLS_ENABLED:-false}
-      DEFAULT_CIDRS: ${DEFAULT_CIDRS:-192.168.1.0/24}
-      DEFAULT_SSH_USER: ${DEFAULT_SSH_USER:-}
-      BOOTSTRAP_USER: ${BOOTSTRAP_USER:-}
-      BOOTSTRAP_PASSWORD: ${BOOTSTRAP_PASSWORD:-}
-      SCAN_TIMEOUT: ${SCAN_TIMEOUT:-0.6}
       INVENTORY_FILE: /app/data/inventory.json
 
     volumes:
       # Inventaire de parc + clé de la console (persistant) :
       - ./data:/app/data
-      # Optionnel : monter les clés SSH perso de l'admin. Inutile par défaut,
-      # la console génère sa propre clé dans /app/data. À décommenter au besoin.
+      # Optionnel : clés SSH perso de l'admin (la console génère la sienne sinon)
       # - /root/.ssh:/root/.ssh:ro
 
     restart: unless-stopped
 
 # Déploiement :
-#   - Docker local :  cp .env.example .env  &&  docker compose up -d --build
-#   - Portainer    :  déployer la stack depuis le repo Git, puis renseigner les
-#                     variables dans "Environment variables" (au moins
-#                     FILEBEAT_OUTPUT_HOST et BOOTSTRAP_USER).
+#   - Local     : cp .env.example .env  &&  docker compose up -d --build
+#   - Portainer : déployer depuis le repo Git, définir les variables dans
+#                 "Environment variables" (FILEBEAT_OUTPUT_HOST, BOOTSTRAP_USER, ...).
 #   -> http://<ip-de-la-box>:5000

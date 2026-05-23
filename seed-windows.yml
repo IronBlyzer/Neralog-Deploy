@@ -26,7 +26,7 @@
         state: present
 
     - name: Installer la clé publique (administrators_authorized_keys)
-      ansible.windows.win_lineinfile:
+      community.windows.win_lineinfile:
         path: 'C:\ProgramData\ssh\administrators_authorized_keys'
         line: "{{ console_pubkey }}"
         create: true
