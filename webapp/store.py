@@ -143,3 +143,58 @@ class InventoryStore:
             })
         hosts.sort(key=lambda h: tuple(int(x) for x in h["ip"].split(".")) if h["ip"].count(".") == 3 else (0,))
         return {"last_scan_at": last_scan, "hosts": hosts, "counts": counts, "total": len(hosts)}
+
+
+class PresetStore:
+    """Presets de config Filebeat (modules / chemins / champ client), persistés en JSON.
+
+    Permet d'enregistrer une config sous un nom et de la recharger plus tard —
+    pratique en multi-clients (un preset par type de machine ou par client).
+    Fichier : {"presets": {"<nom>": {"modules": [...], "log_paths": [...], "client": "..."}}}
+    """
+
+    def __init__(self, path: str | Path):
+        self.path = Path(path)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+
+    def _load(self) -> dict:
+        if not self.path.exists():
+            return {}
+        try:
+            with self.path.open() as f:
+                data = json.load(f)
+            return data.get("presets", {}) if isinstance(data, dict) else {}
+        except (json.JSONDecodeError, OSError):
+            return {}
+
+    def _save(self, presets: dict) -> None:
+        tmp = self.path.with_suffix(".tmp")
+        with tmp.open("w") as f:
+            json.dump({"presets": presets}, f, indent=2, ensure_ascii=False)
+        tmp.replace(self.path)
+
+    def list(self) -> list[dict]:
+        with _LOCK:
+            presets = self._load()
+        return [{"name": n, "config": c} for n, c in sorted(presets.items())]
+
+    def save(self, name: str, config: dict) -> list[dict]:
+        name = (name or "").strip()
+        if not name:
+            raise ValueError("nom de preset vide")
+        with _LOCK:
+            presets = self._load()
+            presets[name] = {
+                "modules": list(config.get("modules") or []),
+                "log_paths": list(config.get("log_paths") or []),
+                "client": (config.get("client") or "").strip(),
+            }
+            self._save(presets)
+        return self.list()
+
+    def delete(self, name: str) -> list[dict]:
+        with _LOCK:
+            presets = self._load()
+            presets.pop(name, None)
+            self._save(presets)
+        return self.list()

@@ -17,9 +17,10 @@ const OS_ORDER = ["linux", "windows", "freebsd", "unknown"];
     if (cfg.scan_timeout) $("timeout").value = cfg.scan_timeout;
     if (cfg.output_type) $("out-type-badge").textContent = cfg.output_type;
     if (cfg.output_host) $("out-host-text").textContent = cfg.output_host;
-    if (cfg.default_ssh_user) $("ssh-user").value = cfg.default_ssh_user;
     if (cfg.bootstrap_user) $("boot-user").value = cfg.bootstrap_user;
   } catch (e) { /* défauts HTML */ }
+
+  renderFbConfig();
 
   // Inventaire de parc persistant : on l'affiche dès l'ouverture, sans rescanner.
   await loadInventory(true);
@@ -215,6 +216,17 @@ function updateSelCount() {
   $("deploy-btn").disabled = selected.size === 0;
   $("seed-count").textContent = selected.size;
   $("seed-btn").disabled = selected.size === 0;
+
+  // Indique combien de machines sélectionnées passent par clé vs mot de passe
+  const sel = HOSTS.filter((h) => selected.has(h.ip));
+  const keyed = sel.filter((h) => h.access === "key").length;
+  const nokey = sel.length - keyed;
+  const hint = $("ssh-hint");
+  if (hint) {
+    if (sel.length === 0) hint.textContent = "Sélectionne des machines pour déployer.";
+    else if (nokey === 0) hint.innerHTML = `✓ ${keyed} machine(s) 🔑 — déploiement par clé.`;
+    else hint.innerHTML = `🔑 ${keyed} par clé · <strong>${nokey}</strong> sans clé : sème-les via l'onglet Accès, ou renseigne leur identifiant avec « creds » en partie 2.`;
+  }
 }
 
 // Hôtes sélectionnés + leurs creds perso éventuels (helper commun seed/deploy)
@@ -230,11 +242,107 @@ function chosenHosts() {
 }
 
 // ------------------------------------------------------------------ DEPLOY
+// Modules Filebeat proposés (le 1er booléen = coché par défaut).
+const FB_MODULES = [
+  ["system", true], ["auditd", false], ["nginx", false], ["apache", false],
+  ["mysql", false], ["postgresql", false], ["redis", false],
+  ["traefik", false], ["haproxy", false], ["iptables", false],
+];
+
+function addPathRow(value = "") {
+  const row = document.createElement("div");
+  row.className = "path-row";
+  const inp = document.createElement("input");
+  inp.type = "text"; inp.value = value; inp.placeholder = "/var/log/monapp/*.log";
+  const rm = document.createElement("button");
+  rm.type = "button"; rm.className = "rm"; rm.textContent = "×";
+  rm.onclick = () => row.remove();
+  row.append(inp, rm);
+  $("path-list").appendChild(row);
+}
+
+function renderFbConfig() {
+  const grid = $("module-grid");
+  if (grid && !grid.dataset.ready) {
+    grid.dataset.ready = "1";
+    FB_MODULES.forEach(([val, on]) => {
+      const lab = document.createElement("label");
+      lab.className = "check";
+      lab.innerHTML = `<input type="checkbox" value="${val}" ${on ? "checked" : ""}> ${val}`;
+      grid.appendChild(lab);
+    });
+  }
+  const pl = $("path-list");
+  if (pl && !pl.dataset.ready) {
+    pl.dataset.ready = "1";
+    addPathRow("/var/log/*.log");
+  }
+  const addBtn = $("add-path");
+  if (addBtn) addBtn.addEventListener("click", () => addPathRow());
+
+  // Presets : charger / enregistrer / supprimer
+  $("preset-select").addEventListener("change", (e) => {
+    const name = e.target.value;
+    if (name && PRESETS[name]) { applyConfig(PRESETS[name]); $("preset-name").value = name; }
+  });
+  $("preset-save").addEventListener("click", async () => {
+    const name = ($("preset-name").value || "").trim();
+    if (!name) { $("preset-name").focus(); return; }
+    await fetch("/api/presets", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, config: gatherConfig() }),
+    });
+    await loadPresets();
+    $("preset-select").value = name;
+  });
+  $("preset-del").addEventListener("click", async () => {
+    const name = $("preset-select").value;
+    if (!name) return;
+    await fetch("/api/presets/" + encodeURIComponent(name), { method: "DELETE" });
+    $("preset-name").value = "";
+    await loadPresets();
+  });
+  loadPresets();
+}
+
+let PRESETS = {};
+
+async function loadPresets() {
+  try {
+    const data = await (await fetch("/api/presets")).json();
+    PRESETS = {};
+    (data.presets || []).forEach((p) => { PRESETS[p.name] = p.config; });
+    const sel = $("preset-select");
+    const current = sel.value;
+    sel.innerHTML = `<option value="">— charger un preset —</option>` +
+      Object.keys(PRESETS).map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
+    if (PRESETS[current]) sel.value = current;
+  } catch (e) { /* pas de presets */ }
+}
+
+// Applique une config (preset) aux contrôles de l'UI.
+function applyConfig(cfg) {
+  cfg = cfg || {};
+  const mods = cfg.modules || [];
+  document.querySelectorAll("#module-grid input").forEach((c) => { c.checked = mods.includes(c.value); });
+  const pl = $("path-list");
+  pl.innerHTML = "";
+  (cfg.log_paths || []).forEach((p) => addPathRow(p));
+  $("client-field").value = cfg.client || "";
+}
+
+function gatherConfig() {
+  const modules = [...document.querySelectorAll("#module-grid input:checked")].map((c) => c.value);
+  const log_paths = [...document.querySelectorAll("#path-list input")]
+    .map((i) => i.value.trim()).filter(Boolean);
+  const client = ($("client-field").value || "").trim();
+  return { modules, log_paths, client };
+}
+
 $("deploy-btn").addEventListener("click", async () => {
   const payload = {
-    hosts: chosenHosts(),
-    ssh_user: $("ssh-user").value, become_password: $("become-pass").value,
-    win_user: $("win-user").value, win_password: $("win-pass").value,
+    hosts: chosenHosts(),       // identifiants par machine gérés en partie 2 (« creds »)
+    config: gatherConfig(),     // modules / chemins / champ client choisis ci-dessus
     dry_run: $("dry-run").checked,
   };
   await launch("/api/deploy", payload, {

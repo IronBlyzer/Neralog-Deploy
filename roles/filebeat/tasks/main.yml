@@ -3,27 +3,27 @@
 
 - name: Définir les chemins selon l'OS
   ansible.builtin.set_fact:
-    filebeat_config_dir: "{{ '/usr/local/etc/filebeat' if ansible_os_family == 'FreeBSD' else '/etc/filebeat' }}"
+    filebeat_config_dir: "{{ '/usr/local/etc/filebeat' if ansible_facts['os_family'] == 'FreeBSD' else '/etc/filebeat' }}"
 
 - name: Installer (Debian/Ubuntu)
   ansible.builtin.include_tasks: install-debian.yml
-  when: ansible_os_family == "Debian"
+  when: ansible_facts['os_family'] == "Debian"
   tags: [install]
 
 - name: Installer (RHEL/CentOS/Rocky)
   ansible.builtin.include_tasks: install-redhat.yml
-  when: ansible_os_family == "RedHat"
+  when: ansible_facts['os_family'] == "RedHat"
   tags: [install]
 
 - name: Installer (FreeBSD)
   ansible.builtin.include_tasks: install-freebsd.yml
-  when: ansible_os_family == "FreeBSD"
+  when: ansible_facts['os_family'] == "FreeBSD"
   tags: [install]
 
 - name: Échouer proprement si l'OS n'est pas géré
   ansible.builtin.fail:
-    msg: "OS non supporté : {{ ansible_os_family }} ({{ ansible_distribution | default('?') }})"
-  when: ansible_os_family not in ["Debian", "RedHat", "FreeBSD"]
+    msg: "OS non supporté : {{ ansible_facts['os_family'] }} ({{ ansible_facts['distribution'] | default('?') }})"
+  when: ansible_facts['os_family'] not in ["Debian", "RedHat", "FreeBSD"]
 
 - name: Déployer la configuration filebeat.yml
   ansible.builtin.template:

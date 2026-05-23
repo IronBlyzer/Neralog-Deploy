@@ -36,12 +36,13 @@ sys.path.insert(0, str(DETECT_DIR))
 load_dotenv(PROJECT_ROOT / ".env")  # charge la config
 
 import scanner  # noqa: E402
-from store import InventoryStore  # noqa: E402
+from store import InventoryStore, PresetStore  # noqa: E402
 
 app = Flask(__name__, static_folder=str(BASE_DIR / "static"), static_url_path="/static")
 
 INVENTORY_FILE = os.environ.get("INVENTORY_FILE", str(PROJECT_ROOT / "data" / "inventory.json"))
 store = InventoryStore(INVENTORY_FILE)
+presets = PresetStore(str(Path(INVENTORY_FILE).parent / "fb_presets.json"))
 
 
 def env(key: str, default: str = "") -> str:
@@ -153,8 +154,8 @@ def host_name(h: dict) -> str:
     return h.get("hostname") or f"host_{h['ip'].replace('.', '_')}"
 
 
-def build_inventory(selected: list[dict], creds: dict) -> dict:
-    """Inventaire de déploiement : clé pour les machines semées, sinon mot de passe."""
+def build_inventory(selected: list[dict]) -> dict:
+    """Inventaire de déploiement : clé pour les machines semées, sinon creds par machine (partie 2)."""
     groups = {g: {"hosts": {}} for g in ("linux", "freebsd", "windows", "unknown")}
     for h in selected:
         osf = h.get("os_family", "unknown")
@@ -162,6 +163,8 @@ def build_inventory(selected: list[dict], creds: dict) -> dict:
             osf = "unknown"
         name = host_name(h)
         keyed = h.get("access") == "key"
+        cred_user = (h.get("cred_user") or "").strip()
+        cred_pw = h.get("cred_password") or ""
         hv: dict = {"ansible_host": h["ip"]}
         if osf in ("linux", "freebsd"):
             hv["ansible_connection"] = "ssh"
@@ -171,28 +174,25 @@ def build_inventory(selected: list[dict], creds: dict) -> dict:
                 if osf == "freebsd":
                     hv["ansible_become_method"] = "doas"
             else:
-                user = (h.get("cred_user") or "").strip() or creds.get("ssh_user")
-                pw = h.get("cred_password") or creds.get("become_password")
+                user = cred_user or CONFIG["default_ssh_user"]
                 if user:
                     hv["ansible_user"] = user
-                if pw:
-                    hv["ansible_become_password"] = pw
+                if cred_pw:
+                    hv["ansible_become_password"] = cred_pw
         elif osf == "windows":
             if keyed:  # Windows via OpenSSH + clé
                 hv["ansible_connection"] = "ssh"
                 hv["ansible_user"] = SVC_USER
                 hv["ansible_ssh_private_key_file"] = KEY_PRIV
                 hv["ansible_shell_type"] = "powershell"
-            else:       # repli WinRM + identifiants
+            else:       # repli WinRM + creds par machine
                 hv["ansible_connection"] = "winrm"
                 hv["ansible_port"] = h.get("winrm_port") or 5985
                 hv["ansible_winrm_server_cert_validation"] = "ignore"
-                user = (h.get("cred_user") or "").strip() or creds.get("win_user")
-                pw = h.get("cred_password") or creds.get("win_password")
-                if user:
-                    hv["ansible_user"] = user
-                if pw:
-                    hv["ansible_password"] = pw
+                if cred_user:
+                    hv["ansible_user"] = cred_user
+                if cred_pw:
+                    hv["ansible_password"] = cred_pw
         if h.get("appliance"):
             hv["appliance"] = h["appliance"]
         groups[osf]["hosts"][name] = hv
@@ -307,18 +307,25 @@ def api_deploy():
     if not selected:
         return jsonify({"error": "Aucune machine sélectionnée."}), 400
 
-    creds = {
-        "ssh_user": (data.get("ssh_user") or CONFIG["default_ssh_user"]).strip(),
-        "become_password": data.get("become_password") or "",
-        "win_user": (data.get("win_user") or "").strip(),
-        "win_password": data.get("win_password") or "",
-    }
     # La sortie vient du .env (ELK connu) ; le client peut surcharger si besoin.
     output = data.get("output", {})
+
+    # Config Filebeat personnalisée depuis l'UI (modules / chemins / champ client).
+    cfg = data.get("config", {}) or {}
+    modules = [str(m).strip() for m in (cfg.get("modules") or []) if str(m).strip()] or ["system"]
+    log_paths = [str(p).strip() for p in (cfg.get("log_paths") or []) if str(p).strip()] or ["/var/log/*.log"]
+    extra_fields = {"managed_by": "ansible"}
+    client = (cfg.get("client") or "").strip()
+    if client:
+        extra_fields["client"] = client
+
     extra_vars = {
         "filebeat_output_type": output.get("type") or CONFIG["output_type"],
         "filebeat_output_host": output.get("host") or CONFIG["output_host"],
         "filebeat_tls_enabled": CONFIG["tls_enabled"],
+        "filebeat_modules": modules,
+        "filebeat_log_paths": log_paths,
+        "filebeat_extra_fields": extra_fields,
     }
     check = bool(data.get("dry_run", False))
 
@@ -330,7 +337,7 @@ def api_deploy():
     if "windows" in families:
         playbooks.append("deploy-windows.yml")
 
-    inventory = build_inventory(selected, creds)
+    inventory = build_inventory(selected)
     fd, inv_path = tempfile.mkstemp(prefix="fb_inv_", suffix=".yml")
     with os.fdopen(fd, "w") as f:
         yaml.safe_dump(inventory, f, default_flow_style=False, sort_keys=False)
@@ -347,6 +354,26 @@ def api_deploy():
                         "hosts_meta": hosts_meta, "results": []}
     threading.Thread(target=run_playbook, args=(job_id, inv_path, extra_vars, check, playbooks, "deploy"), daemon=True).start()
     return jsonify({"job_id": job_id})
+
+
+@app.route("/api/presets", methods=["GET"])
+def api_presets_list():
+    return jsonify({"presets": presets.list()})
+
+
+@app.route("/api/presets", methods=["POST"])
+def api_presets_save():
+    data = request.get_json(force=True)
+    try:
+        out = presets.save(data.get("name", ""), data.get("config", {}) or {})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify({"presets": out})
+
+
+@app.route("/api/presets/<path:name>", methods=["DELETE"])
+def api_presets_delete(name: str):
+    return jsonify({"presets": presets.delete(name)})
 
 
 @app.route("/api/key")

@@ -106,31 +106,36 @@
     <section class="panel" id="deploy-panel" hidden>
       <div class="panel-head"><span class="idx">04</span><h2>Déploiement</h2></div>
       <div class="panel-body">
-        <div class="grid2">
-          <div>
-            <label class="field-label">Sortie centralisée <span class="hint">· depuis .env</span></label>
-            <div class="output-info">
-              <span class="out-badge" id="out-type-badge">logstash</span>
-              <span class="arrow">→</span>
-              <span class="out-host" id="out-host-text">—</span>
-            </div>
-          </div>
-          <div>
-            <label class="field-label">SSH (Linux / FreeBSD)</label>
-            <div class="row tight">
-              <input type="text" id="ssh-user" placeholder="utilisateur ssh (ex: admin)">
-              <input type="password" id="become-pass" placeholder="mot de passe sudo (option)">
-            </div>
-          </div>
+        <label class="field-label">Sortie centralisée <span class="hint">· depuis .env</span></label>
+        <div class="output-info">
+          <span class="out-badge" id="out-type-badge">logstash</span>
+          <span class="arrow">→</span>
+          <span class="out-host" id="out-host-text">—</span>
         </div>
 
-        <details class="win-block">
-          <summary>Identifiants Windows (WinRM) — si machines Windows sélectionnées</summary>
-          <div class="row tight">
-            <input type="text" id="win-user" placeholder="utilisateur (ex: Administrator)">
-            <input type="password" id="win-pass" placeholder="mot de passe">
+        <div class="fb-config">
+          <label class="field-label">Config Filebeat <span class="hint">· ce qui sera collecté</span></label>
+
+          <div class="cfg-sub">Presets <span class="hint-inline">enregistrer / réutiliser une config</span></div>
+          <div class="preset-bar">
+            <select id="preset-select"><option value="">— charger un preset —</option></select>
+            <button type="button" class="btn ghost" id="preset-del" title="supprimer le preset sélectionné">🗑</button>
+            <input type="text" id="preset-name" placeholder="nom du preset">
+            <button type="button" class="btn ghost" id="preset-save">💾 enregistrer</button>
           </div>
-        </details>
+
+          <div class="cfg-sub">Modules</div>
+          <div class="module-grid" id="module-grid"></div>
+
+          <div class="cfg-sub">Chemins de logs additionnels</div>
+          <div id="path-list" class="path-list"></div>
+          <button type="button" class="btn ghost" id="add-path">+ ajouter un chemin</button>
+
+          <div class="cfg-sub">Identification <span class="hint-inline">optionnel · utile en multi-clients</span></div>
+          <input type="text" id="client-field" class="cfg-input" placeholder="client / site (ex: petit-chateau)">
+        </div>
+
+        <p class="ssh-hint" id="ssh-hint">Sélectionne des machines pour déployer.</p>
 
         <div class="row deploy-row">
           <label class="check"><input type="checkbox" id="dry-run"> simulation (--check, ne modifie rien)</label>

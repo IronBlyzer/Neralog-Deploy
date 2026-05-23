@@ -52,7 +52,7 @@
         content: "{{ svc_user }} ALL=(ALL) NOPASSWD: ALL\n"
         mode: "0440"
         validate: "visudo -cf %s"
-      when: ansible_os_family != "FreeBSD"
+      when: ansible_facts['os_family'] != "FreeBSD"
 
     - name: doas NOPASSWD pour le compte d'automation (FreeBSD)
       ansible.builtin.lineinfile:
@@ -61,7 +61,7 @@
         create: true
         mode: "0644"
         state: present
-      when: ansible_os_family == "FreeBSD"
+      when: ansible_facts['os_family'] == "FreeBSD"
 
     - name: (Option) Verrouiller le compte admin bootstrap
       ansible.builtin.user:
