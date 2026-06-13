@@ -221,6 +221,12 @@ tr.cred-edit td { background: #060a0a; padding: 8px 12px; }
 .preset-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .preset-bar select { min-width: 190px; }
 .preset-bar #preset-name { flex: 1; min-width: 140px; }
+.advanced { margin: 12px 0; }
+.advanced summary { cursor: pointer; list-style: none; }
+.advanced summary::-webkit-details-marker { display: none; }
+.advanced summary::before { content: "▸ "; color: var(--txt-faint); font-size: 10px; }
+.advanced[open] summary::before { content: "▾ "; }
+.advanced > .module-grid { margin-top: 10px; }
 .win-block summary:hover { color: var(--windows); }
 .win-block .row { margin: 0 0 14px; }
 .deploy-row { margin-top: 22px; border-top: 1px solid var(--line); padding-top: 18px; }

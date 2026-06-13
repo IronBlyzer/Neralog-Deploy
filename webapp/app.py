@@ -319,7 +319,7 @@ def api_deploy():
 
     # Config Filebeat personnalisée depuis l'UI (modules / chemins / champ client).
     cfg = data.get("config", {}) or {}
-    modules = [str(m).strip() for m in (cfg.get("modules") or []) if str(m).strip()] or ["system"]
+    modules = [str(m).strip() for m in (cfg.get("modules") or []) if str(m).strip()]
     log_paths = [str(p).strip() for p in (cfg.get("log_paths") or []) if str(p).strip()] or ["/var/log/*.log"]
     extra_fields = {"managed_by": "ansible"}
     client = (cfg.get("client") or "").strip()

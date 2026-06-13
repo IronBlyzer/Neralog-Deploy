@@ -41,20 +41,39 @@
     dest: "{{ filebeat_config_dir }}/filebeat.yml"
     mode: "0600"
     backup: true
-    validate: "filebeat test config -c %s"
+    # Pas de validate: 'filebeat test config' refuse les fichiers non-root, or le
+    # temp file Ansible appartient au compte d'automation. Filet de sécurité gardé :
+    # si la config est invalide, le service ne (re)démarrera pas et ça sortira au RECAP.
   notify: Redémarrer Filebeat
   tags: [config]
 
-- name: Activer les modules Filebeat
-  ansible.builtin.command:
-    cmd: "filebeat modules enable {{ item }}"
+- name: Activer les modules Filebeat (création/écrasement de modules.d/<module>.yml)
+  ansible.builtin.template:
+    src: "{{ item }}.yml.j2"
+    dest: "{{ filebeat_config_dir }}/modules.d/{{ item }}.yml"
+    mode: "0644"
+    owner: root
+    group: root
   loop: "{{ filebeat_modules }}"
-  register: module_enable
-  changed_when: "'Enabled' in module_enable.stdout"
-  failed_when:
-    - module_enable.rc != 0
-    - "'already enabled' not in module_enable.stdout"
-  when: ansible_facts['os_family'] != "Darwin"   # modules Linux-only ; macOS = entrées fichier
+  when:
+    - ansible_facts['os_family'] != "Darwin"   # modules Linux-only ; macOS = entrées fichier
+    - item == "system"                          # seul module avec template embarqué pour l'instant
+  notify: Redémarrer Filebeat
+  tags: [config]
+
+- name: Désactiver les modules Filebeat non listés (renomme .yml -> .yml.disabled)
+  ansible.builtin.shell: |
+    set -e
+    for f in {{ filebeat_config_dir }}/modules.d/*.yml; do
+      [ -e "$f" ] || continue
+      name=$(basename "$f" .yml)
+      case "{{ filebeat_modules | join(' ') }}" in
+        *"$name"*) ;;
+        *) mv "$f" "$f.disabled" ;;
+      esac
+    done
+  changed_when: false
+  when: ansible_facts['os_family'] != "Darwin"
   tags: [config]
 
 - name: Activer et démarrer le service Filebeat

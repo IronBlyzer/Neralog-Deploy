@@ -255,7 +255,9 @@ function chosenHosts() {
 }
 
 // ------------------------------------------------------------------ DEPLOY
-// Modules Filebeat proposés (le 1er booléen = coché par défaut).
+// Modules Filebeat — bloc « avancé » (replié par défaut).
+// `system` coché par défaut : il pose event.module=system, ce que beaucoup
+// de pipelines Logstash attendent comme condition de routage vers Elasticsearch.
 const FB_MODULES = [
   ["system", true], ["auditd", false], ["nginx", false], ["apache", false],
   ["mysql", false], ["postgresql", false], ["redis", false],
@@ -288,7 +290,9 @@ function renderFbConfig() {
   const pl = $("path-list");
   if (pl && !pl.dataset.ready) {
     pl.dataset.ready = "1";
-    addPathRow("/var/log/*.log");
+    // Liste vide par défaut : syslog/auth.log/messages/secure sont déjà
+    // posés par modules.d/system.yml côté Ansible. L'utilisateur ajoute ici
+    // uniquement les chemins applicatifs spécifiques (ex: /var/log/mysql/...).
   }
   const addBtn = $("add-path");
   if (addBtn) addBtn.addEventListener("click", () => addPathRow());

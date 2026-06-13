@@ -20,6 +20,7 @@ filebeat_tls_ca: "/etc/filebeat/certs/ca.crt"
 filebeat_extra_fields:
   managed_by: "ansible"
 
-# Chemins de logs additionnels à ramasser (en plus des modules).
-filebeat_log_paths:
-  - /var/log/*.log
+# Chemins applicatifs additionnels à ajouter au fileset system.syslog (ex: logs métier).
+# Les chemins de base (syslog/auth.log/messages/secure) sont déjà inclus dans
+# templates/system.yml.j2 — pas la peine de les répéter ici.
+filebeat_log_paths: []

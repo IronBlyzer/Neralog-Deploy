@@ -1,0 +1,20 @@
+# {{ ansible_managed }}
+# Module: system — généré par Ansible. Ne pas éditer à la main.
+# Toute la collecte passe par ce module : syslog (chemins de base + additionnels
+# saisis dans l'UI partie 4) et auth.
+- module: system
+  syslog:
+    enabled: true
+    var.paths:
+      - /var/log/syslog
+      - /var/log/messages
+{% for path in filebeat_log_paths | default([]) %}
+{% if path not in ['/var/log/syslog', '/var/log/messages', '/var/log/auth.log', '/var/log/secure'] %}
+      - {{ path }}
+{% endif %}
+{% endfor %}
+  auth:
+    enabled: true
+    var.paths:
+      - /var/log/auth.log
+      - /var/log/secure

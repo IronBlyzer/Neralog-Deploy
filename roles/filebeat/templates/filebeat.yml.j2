@@ -1,19 +1,14 @@
 # {{ ansible_managed }}
 # filebeat.yml — généré par Ansible. Ne pas éditer à la main.
+#
+# Choix d'architecture : pas de filebeat.inputs ici. Toute la collecte passe
+# par les modules (modules.d/*.yml). Avantage : tous les events sortent avec
+# event.module=<module> et event.dataset=<dataset>, ce que le pipeline
+# Logstash en aval utilise comme condition de routage vers Elasticsearch.
+# Les chemins additionnels saisis dans l'UI sont injectés dans le fileset
+# `syslog` du module system (voir templates/system.yml.j2).
 
-# ===========================================================================
-# Entrées : ce que Filebeat collecte
-# ===========================================================================
-filebeat.inputs:
-  - type: filestream
-    id: default-logs
-    enabled: true
-    paths:
-{% for path in filebeat_log_paths %}
-      - {{ path }}
-{% endfor %}
-
-# Découverte automatique des modules (system, nginx, etc.)
+# Découverte automatique des modules
 filebeat.config.modules:
   path: ${path.config}/modules.d/*.yml
   reload.enabled: true

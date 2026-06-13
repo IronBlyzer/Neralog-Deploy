@@ -18,7 +18,10 @@ filebeat_es_password: "CHANGE_ME"      # à mettre dans un vault Ansible !
 # --- Version & modules ------------------------------------------------------
 filebeat_version: "8.x"                 # dépôt Elastic 8.x
 
-# Modules Filebeat activés partout (le module system collecte syslog/auth).
+# Modules Filebeat activés partout. Le module `system` est essentiel : il pose
+# event.module=system dans les events, ce que beaucoup de pipelines Logstash
+# attendent comme condition de routage vers Elasticsearch.
+# Le rôle pose un template propre de modules.d/system.yml (syslog + auth activés).
 filebeat_modules:
   - system
 
