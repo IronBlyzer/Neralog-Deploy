@@ -77,6 +77,7 @@ class InventoryStore:
                     "last_seen": now,
                 })
                 rec.setdefault("os_override", None)
+                rec.setdefault("alias", None)
                 rec.setdefault("first_seen", now)
                 rec.setdefault("deployed", False)
                 rec.setdefault("last_deploy", None)
@@ -90,6 +91,15 @@ class InventoryStore:
             data = self._load()
             if ip in data["hosts"]:
                 data["hosts"][ip]["os_override"] = os_family
+                self._save(data)
+
+    def set_alias(self, ip: str, alias: str | None):
+        """Alias d'affichage donné par l'utilisateur (surcharge le hostname détecté)."""
+        with _LOCK:
+            data = self._load()
+            if ip in data["hosts"]:
+                a = (alias or "").strip()
+                data["hosts"][ip]["alias"] = a or None
                 self._save(data)
 
     def mark_deployed(self, ips: list[str]):
@@ -129,7 +139,9 @@ class InventoryStore:
             counts[eff] = counts.get(eff, 0) + 1
             hosts.append({
                 "ip": rec["ip"],
-                "hostname": rec.get("hostname", rec["ip"]),
+                "hostname": rec.get("alias") or rec.get("hostname") or rec["ip"],
+                "alias": rec.get("alias"),
+                "detected_hostname": rec.get("hostname"),
                 "os_family": eff,
                 "os_detected": rec.get("os_detected", "unknown"),
                 "os_name": rec.get("os_name"),

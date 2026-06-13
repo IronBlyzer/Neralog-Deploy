@@ -133,7 +133,11 @@ function renderTable() {
     tr.innerHTML = `
       <td class="cb"><input type="checkbox" ${selected.has(h.ip) ? "checked" : ""} data-ip="${h.ip}"></td>
       <td class="state">${onlineDot}${keyed}${deployed}</td>
-      <td class="hostname">${esc(h.hostname || "—")}${appliance}</td>
+      <td class="hostname">
+        <span class="hostname-text" data-ip="${h.ip}" title="double-clic pour renommer">${esc(h.hostname || "—")}</span>
+        ${h.alias ? '<span class="alias-badge" title="nom personnalisé">✎</span>' : ''}
+        ${appliance}
+      </td>
       <td class="ip">${h.ip}</td>
       <td><select class="os-pick ${os}" data-ip="${h.ip}">${picker}</select>${h.os_name ? `<div class="os-detected" title="OS détecté par nmap">${esc(h.os_name)}</div>` : ""}</td>
       <td title="ports: ${h.open_ports.join(" ")}">${svcs}</td>
@@ -199,6 +203,39 @@ function renderTable() {
     i.addEventListener("input", () => { credOverride[i.dataset.ip].password = i.value; }));
   tbody.querySelectorAll(".cred-clear").forEach((b) =>
     b.addEventListener("click", () => { delete credOverride[b.dataset.ip]; renderTable(); }));
+
+  // Renommage : double-clic sur le nom -> input éditable -> Entrée pour valider, Échap pour annuler.
+  tbody.querySelectorAll(".hostname-text").forEach((span) => {
+    span.addEventListener("dblclick", () => {
+      const ip = span.dataset.ip;
+      const h = HOSTS.find((x) => x.ip === ip);
+      if (!h) return;
+      const current = h.alias || h.detected_hostname || "";
+      const inp = document.createElement("input");
+      inp.type = "text"; inp.value = current; inp.className = "alias-edit";
+      inp.placeholder = h.detected_hostname || h.ip;
+      span.replaceWith(inp);
+      inp.focus(); inp.select();
+      const commit = async () => {
+        const alias = inp.value.trim();
+        if (alias !== current) {
+          await fetch("/api/alias", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ip, alias }),
+          });
+          h.alias = alias || null;
+          h.hostname = alias || h.detected_hostname || h.ip;
+        }
+        renderTable();
+      };
+      inp.addEventListener("blur", commit);
+      inp.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") inp.blur();
+        else if (e.key === "Escape") { inp.removeEventListener("blur", commit); renderTable(); }
+      });
+    });
+  });
+
   updateSelCount();
 }
 
@@ -255,20 +292,18 @@ function chosenHosts() {
 }
 
 // ------------------------------------------------------------------ DEPLOY
-// Modules Filebeat — bloc « avancé » (replié par défaut).
-// `system` coché par défaut : il pose event.module=system, ce que beaucoup
-// de pipelines Logstash attendent comme condition de routage vers Elasticsearch.
-const FB_MODULES = [
-  ["system", true], ["auditd", false], ["nginx", false], ["apache", false],
-  ["mysql", false], ["postgresql", false], ["redis", false],
-  ["traefik", false], ["haproxy", false], ["iptables", false],
-];
+// ------------------------------------------------------------------ DEPLOY
+// Côté Filebeat, le module `system` est posé en dur par le rôle Ansible
+// (modules.d/system.yml géré via template). Les chemins applicatifs saisis ici
+// par l'utilisateur viennent enrichir le fileset `syslog` de ce même module,
+// donc tout sort avec event.module=system → le pipeline Logstash route en ES.
 
-function addPathRow(value = "") {
+function addPathRow(value = "", base = false) {
   const row = document.createElement("div");
-  row.className = "path-row";
+  row.className = "path-row" + (base ? " base" : "");
   const inp = document.createElement("input");
   inp.type = "text"; inp.value = value; inp.placeholder = "/var/log/monapp/*.log";
+  if (base) inp.title = "chemin de base (présent par défaut, retirable si besoin)";
   const rm = document.createElement("button");
   rm.type = "button"; rm.className = "rm"; rm.textContent = "×";
   rm.onclick = () => row.remove();
@@ -276,23 +311,15 @@ function addPathRow(value = "") {
   $("path-list").appendChild(row);
 }
 
+const BASE_PATHS = ["/var/log/syslog", "/var/log/auth.log", "/var/log/messages", "/var/log/secure"];
+
 function renderFbConfig() {
-  const grid = $("module-grid");
-  if (grid && !grid.dataset.ready) {
-    grid.dataset.ready = "1";
-    FB_MODULES.forEach(([val, on]) => {
-      const lab = document.createElement("label");
-      lab.className = "check";
-      lab.innerHTML = `<input type="checkbox" value="${val}" ${on ? "checked" : ""}> ${val}`;
-      grid.appendChild(lab);
-    });
-  }
   const pl = $("path-list");
   if (pl && !pl.dataset.ready) {
     pl.dataset.ready = "1";
-    // Liste vide par défaut : syslog/auth.log/messages/secure sont déjà
-    // posés par modules.d/system.yml côté Ansible. L'utilisateur ajoute ici
-    // uniquement les chemins applicatifs spécifiques (ex: /var/log/mysql/...).
+    // Chemins de base visibles dès l'ouverture (Debian + RHEL). Filebeat ignore
+    // ceux qui n'existent pas sur la cible. L'utilisateur peut les retirer.
+    BASE_PATHS.forEach((p) => addPathRow(p, true));
   }
   const addBtn = $("add-path");
   if (addBtn) addBtn.addEventListener("click", () => addPathRow());
@@ -340,20 +367,17 @@ async function loadPresets() {
 // Applique une config (preset) aux contrôles de l'UI.
 function applyConfig(cfg) {
   cfg = cfg || {};
-  const mods = cfg.modules || [];
-  document.querySelectorAll("#module-grid input").forEach((c) => { c.checked = mods.includes(c.value); });
   const pl = $("path-list");
   pl.innerHTML = "";
-  (cfg.log_paths || []).forEach((p) => addPathRow(p));
+  (cfg.log_paths || []).forEach((p) => addPathRow(p, BASE_PATHS.includes(p)));
   $("client-field").value = cfg.client || "";
 }
 
 function gatherConfig() {
-  const modules = [...document.querySelectorAll("#module-grid input:checked")].map((c) => c.value);
   const log_paths = [...document.querySelectorAll("#path-list input")]
     .map((i) => i.value.trim()).filter(Boolean);
   const client = ($("client-field").value || "").trim();
-  return { modules, log_paths, client };
+  return { log_paths, client };   // modules forcés à [system] par le backend
 }
 
 $("deploy-btn").addEventListener("click", async () => {

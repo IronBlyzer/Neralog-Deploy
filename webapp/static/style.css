@@ -151,6 +151,10 @@ tbody td { padding: 9px 12px; border-bottom: 1px solid var(--line); font-size: 1
 tbody tr:hover { background: rgba(57,211,195,0.04); }
 tbody tr.selected { background: rgba(57,211,195,0.07); }
 .hostname { color: var(--txt); }
+.hostname-text { cursor: text; padding: 2px 4px; margin: -2px -4px; border-radius: 2px; }
+.hostname-text:hover { background: rgba(255,255,255,0.04); outline: 1px dashed var(--line-bright); }
+.alias-badge { font-size: 10px; color: var(--ok); margin-left: 4px; opacity: 0.8; }
+.alias-edit { background: var(--bg); color: var(--txt); border: 1px solid var(--accent); padding: 2px 5px; font-family: inherit; font-size: inherit; width: 180px; }
 .ip { color: var(--txt-dim); }
 
 select.os-pick {
@@ -215,18 +219,14 @@ tr.cred-edit td { background: #060a0a; padding: 8px 12px; }
 .path-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
 .path-row { display: flex; gap: 8px; align-items: center; }
 .path-row input { flex: 1; }
+.path-row.base input { color: var(--txt-dim); border-color: var(--line); }
+.path-row.base::before { content: "·"; color: var(--txt-faint); width: 10px; text-align: center; }
 .path-row .rm { background: none; border: 1px solid var(--line-bright); color: var(--txt-dim); cursor: pointer; padding: 8px 12px; font-family: inherit; font-size: 13px; }
 .path-row .rm:hover { border-color: var(--err); color: var(--err); }
 .cfg-input { width: 100%; max-width: 340px; }
 .preset-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .preset-bar select { min-width: 190px; }
 .preset-bar #preset-name { flex: 1; min-width: 140px; }
-.advanced { margin: 12px 0; }
-.advanced summary { cursor: pointer; list-style: none; }
-.advanced summary::-webkit-details-marker { display: none; }
-.advanced summary::before { content: "▸ "; color: var(--txt-faint); font-size: 10px; }
-.advanced[open] summary::before { content: "▾ "; }
-.advanced > .module-grid { margin-top: 10px; }
 .win-block summary:hover { color: var(--windows); }
 .win-block .row { margin: 0 0 14px; }
 .deploy-row { margin-top: 22px; border-top: 1px solid var(--line); padding-top: 18px; }
